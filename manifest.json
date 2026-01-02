@@ -1,0 +1,26 @@
+
+{
+  "name": "صحتي | مساعد الأدوية الذكي",
+  "short_name": "صحتي",
+  "description": "تطبيق ذكي لمتابعة الأدوية والتقارير الصحية باستخدام الذكاء الاصطناعي",
+  "gcm_sender_id": "103953800507",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/883/883356.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/883/883356.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
