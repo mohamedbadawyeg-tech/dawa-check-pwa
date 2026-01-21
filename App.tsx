@@ -1716,7 +1716,6 @@ const App: React.FC = () => {
             <button onClick={handleAI} disabled={isAnalyzing} className={`w-18 h-18 rounded-[2rem] text-white shadow-2xl active:scale-95 flex items-center justify-center border-[6px] border-white dark:border-slate-900 ${state.caregiverMode ? 'bg-emerald-600' : 'bg-blue-600'}`}>
               {isAnalyzing ? <RefreshCw className="w-9 h-9 animate-spin" /> : <BrainCircuit className="w-10 h-10" />}
             </button>
-            <button onClick={() => setIsCalendarOpen(true)} className="w-14 h-14 flex items-center justify-center rounded-[1.6rem] text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border dark:border-slate-700 active:scale-90 transition-all shadow-sm"><CalendarIcon className="w-8 h-8"/></button>
             <button onClick={toggleMute} className={`w-14 h-14 flex items-center justify-center rounded-[1.6rem] active:scale-90 transition-all shadow-sm ${isMuted ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border dark:border-slate-700'}`}>
               {isMuted ? <VolumeX className="w-8 h-8"/> : <Volume2 className="w-8 h-8"/>}
             </button>
