@@ -1412,52 +1412,7 @@ const App: React.FC = () => {
                </div>
             )}
 
-            {/* Diagnosis Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-lg border border-slate-100 dark:border-slate-800 relative group overflow-hidden">
-                <div className="flex items-start justify-between gap-4">
-                   <div className="flex-1 text-right">
-                      <div className="flex items-center justify-end gap-2 mb-3">
-                         <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg">التشخيص الأخير</h3>
-                         <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400">
-                           <Activity className="w-5 h-5" />
-                         </div>
-                      </div>
-                      
-                      {state.lastDiagnosis ? (
-                          <div className="space-y-2">
-                             <p className="text-slate-600 dark:text-slate-300 font-bold leading-relaxed">{state.lastDiagnosis}</p>
-                             {state.diagnosedBy && (
-                                <p className="text-xs text-slate-400 font-bold flex items-center justify-end gap-1">
-                                   بواسطة: {state.diagnosedBy} <Stethoscope className="w-3 h-3" />
-                                </p>
-                             )}
-                          </div>
-                      ) : (
-                          <p className="text-slate-400 text-sm font-bold py-2">لم يتم تسجيل تشخيص بعد.</p>
-                      )}
-                   </div>
-                </div>
 
-                <div className="mt-6 flex gap-3">
-                    <button 
-                        onClick={() => {
-                           const diagnosis = state.lastDiagnosis || '';
-                           const by = state.diagnosedBy || '';
-                           const text = `السلام عليكم،\n\n*التشخيص الأخير للحالة:*\n${diagnosis}\n${by ? `\nتم التشخيص بواسطة: ${by}` : ''}\n\nيرجى المراجعة والافادة.`;
-                           window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                        }}
-                        className="flex-1 py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl font-black text-sm shadow-lg shadow-green-100 dark:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                        <MessageCircle className="w-4 h-4" /> إرسال للواتساب
-                    </button>
-                    <button 
-                        onClick={() => setIsDiagnosisEditOpen(true)}
-                        className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                    >
-                        <Edit3 className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
           </div>
 
           <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1672,6 +1627,53 @@ const App: React.FC = () => {
                    </div>
                 </div>
               </section>
+
+              {/* Diagnosis Card */}
+              <div className="bg-white dark:bg-slate-900 rounded-[2.8rem] p-8 shadow-xl border border-slate-100 dark:border-slate-800 relative group overflow-hidden">
+                  <div className="flex items-start justify-between gap-4">
+                     <div className="flex-1 text-right">
+                        <div className="flex items-center justify-end gap-2 mb-3">
+                           <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg">التشخيص الأخير</h3>
+                           <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400">
+                             <Activity className="w-5 h-5" />
+                           </div>
+                        </div>
+                        
+                        {state.lastDiagnosis ? (
+                            <div className="space-y-2">
+                               <p className="text-slate-600 dark:text-slate-300 font-bold leading-relaxed">{state.lastDiagnosis}</p>
+                               {state.diagnosedBy && (
+                                  <p className="text-xs text-slate-400 font-bold flex items-center justify-end gap-1">
+                                     بواسطة: {state.diagnosedBy} <Stethoscope className="w-3 h-3" />
+                                  </p>
+                               )}
+                            </div>
+                        ) : (
+                            <p className="text-slate-400 text-sm font-bold py-2">لم يتم تسجيل تشخيص بعد.</p>
+                        )}
+                     </div>
+                  </div>
+
+                  <div className="mt-6 flex gap-3">
+                      <button 
+                          onClick={() => {
+                             const diagnosis = state.lastDiagnosis || '';
+                             const by = state.diagnosedBy || '';
+                             const text = `السلام عليكم،\n\n*التشخيص الأخير للحالة:*\n${diagnosis}\n${by ? `\nتم التشخيص بواسطة: ${by}` : ''}\n\nيرجى المراجعة والافادة.`;
+                             window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                          }}
+                          className="flex-1 py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl font-black text-sm shadow-lg shadow-green-100 dark:shadow-none transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                          <MessageCircle className="w-4 h-4" /> إرسال للواتساب
+                      </button>
+                      <button 
+                          onClick={() => setIsDiagnosisEditOpen(true)}
+                          className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                      >
+                          <Edit3 className="w-4 h-4" />
+                      </button>
+                  </div>
+              </div>
 
               <section className="bg-slate-900 dark:bg-slate-900 rounded-[2.8rem] p-8 text-white shadow-2xl relative overflow-hidden border-b-[10px] border-blue-600">
                 <div className="flex items-center justify-between mb-8">
