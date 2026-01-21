@@ -15,7 +15,7 @@ export const generateDailyHealthTip = async (state: AppState): Promise<string> =
   const adherencePercent = totalMeds ? Math.round((takenCount / totalMeds) * 100) : 0;
   const currentHour = new Date().getHours();
   const missedMeds = medications.filter(m => {
-    const slotHour = SLOT_HOURS[m.timeSlot as TimeSlot];
+    const slotHour = state.timeSlotSettings?.[m.timeSlot]?.hour ?? SLOT_HOURS[m.timeSlot as TimeSlot];
     return !state.takenMedications[m.id] && slotHour < currentHour;
   });
   const missedNames = missedMeds.map(m => m.name).join(', ');
@@ -86,7 +86,7 @@ export const analyzeHealthStatus = async (state: AppState): Promise<AIAnalysisRe
   
   const currentHour = new Date().getHours();
   const missedMeds = medications.filter(m => {
-    const slotHour = SLOT_HOURS[m.timeSlot as TimeSlot];
+    const slotHour = state.timeSlotSettings?.[m.timeSlot]?.hour ?? SLOT_HOURS[m.timeSlot as TimeSlot];
     return !state.takenMedications[m.id] && currentHour > slotHour;
   });
 

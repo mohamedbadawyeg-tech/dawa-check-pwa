@@ -150,6 +150,7 @@ export const syncPatientData = async (patientId: string, data: AppState) => {
       dietGuidelines: data.dietGuidelines,
       upcomingProcedures: data.upcomingProcedures || "",
       labTests: data.labTests || [],
+      timeSlotSettings: data.timeSlotSettings || {},
       lastDailyTipDate: data.lastDailyTipDate || null,
       dailyTipContent: data.dailyTipContent || "",
       lastUpdated: serverTimestamp()

@@ -54,7 +54,8 @@ async function checkAndSendMedications() {
 
     // Find medications scheduled for this hour
     const dueMeds = data.medications.filter(med => {
-      const slotHour = SLOT_HOURS[med.timeSlot];
+      const customHour = data.timeSlotSettings?.[med.timeSlot]?.hour;
+      const slotHour = customHour !== undefined ? customHour : SLOT_HOURS[med.timeSlot];
       return slotHour === currentHour;
     });
 

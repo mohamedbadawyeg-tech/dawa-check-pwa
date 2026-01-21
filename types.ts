@@ -91,6 +91,7 @@ export interface AppState {
   };
   lastDiagnosis?: string;
   diagnosedBy?: string;
+  timeSlotSettings?: Record<string, { label: string, hour: number }>;
 }
 
 export interface AIAnalysisResult {
