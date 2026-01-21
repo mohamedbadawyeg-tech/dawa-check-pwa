@@ -2,12 +2,13 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'health-track-cache-v2';
+const CACHE_NAME = 'health-track-cache-v3';
 const assetsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
-  'https://cdn-icons-png.flaticon.com/512/883/883356.png'
+  '/icons/sehaty-192.png',
+  '/icons/sehaty-512.png'
 ];
 
 // Firebase Config
@@ -30,8 +31,8 @@ try {
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
       body: payload.notification.body,
-      icon: payload.notification.icon || 'https://cdn-icons-png.flaticon.com/512/883/883356.png',
-      badge: payload.notification.badge || 'https://cdn-icons-png.flaticon.com/512/883/883356.png',
+      icon: payload.notification.icon || '/icons/sehaty-192.png',
+      badge: payload.notification.badge || '/icons/sehaty-192.png',
       data: payload.data,
       vibrate: [200, 100, 200]
     };

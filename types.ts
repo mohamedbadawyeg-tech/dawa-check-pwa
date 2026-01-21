@@ -19,6 +19,8 @@ export interface Medication {
   frequencyLabel: string;
   category?: 'pressure' | 'diabetes' | 'blood-thinner' | 'antibiotic' | 'stomach' | 'other';
   sideEffects?: string[]; 
+  stock?: number;
+  reorderUnit?: 'pack' | 'strip';
 }
 
 export interface HealthReport {
@@ -40,6 +42,14 @@ export interface HealthReport {
   mood?: 'happy' | 'calm' | 'anxious' | 'sad' | '';
 }
 
+export interface LabTest {
+  id: string;
+  name: string;
+  date: string;
+  result: string;
+  notes?: string;
+}
+
 export interface DayHistory {
   report: HealthReport;
   takenMedications: Record<string, boolean>;
@@ -49,12 +59,15 @@ export interface DayHistory {
 export interface AppState {
   patientName: string;
   patientAge: number;
+  patientGender?: 'male' | 'female';
   patientId: string;
   caregiverMode: boolean;
   caregiverTargetId: string | null;
   medications: Medication[];
   takenMedications: Record<string, boolean>;
   notificationsEnabled: boolean;
+  mandatoryRemindersEnabled?: boolean;
+  pharmacyPhone?: string;
   sentNotifications: string[];
   customReminderTimes: Record<string, string>;
   darkMode?: boolean;
@@ -71,10 +84,13 @@ export interface AppState {
   medicalHistorySummary: string;
   dietGuidelines: string;
   upcomingProcedures: string; 
+  labTests?: LabTest[];
   remoteReminder?: {
     timestamp: number;
     medName: string;
   };
+  lastDiagnosis?: string;
+  diagnosedBy?: string;
 }
 
 export interface AIAnalysisResult {

@@ -11,7 +11,7 @@
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="./manifest.json" />
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/883/883356.png">
+    <link rel="apple-touch-icon" href="/icons/sehaty-192.png">
     
     <title>صحتي | مساعد الأدوية الذكي</title>
     
@@ -28,6 +28,9 @@
         --primary: #2563eb;
         --secondary: #64748b;
         --danger: #ef4444;
+      }
+      html {
+        font-size: 14px;
       }
       body {
         font-family: 'Tajawal', sans-serif;
@@ -112,8 +115,7 @@
   }
 }
 </script>
-  <link rel="stylesheet" href="/index.css">
-</head>
+  </head>
   <body class="antialiased text-slate-900 dark:text-slate-100 overflow-x-hidden">
     <div id="root"></div>
     <script>
@@ -123,6 +125,15 @@
             console.log('SW registered:', registration);
           }).catch(error => {
             console.log('SW registration failed:', error);
+          });
+
+          // Reload page when new service worker takes control
+          let refreshing = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) {
+              refreshing = true;
+              window.location.reload();
+            }
           });
         });
       }

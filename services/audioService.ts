@@ -60,67 +60,85 @@ export const playChime = async () => {
   osc.start();
   osc.stop(ctx.currentTime + 0.5);
   
-  return new Promise(resolve => setTimeout(resolve, 600)); // Wait for chime to finish
+  return new Promise<void>(resolve => setTimeout(resolve, 600)); // Wait for chime to finish
 };
 
 import { API_KEY } from './firebaseService';
 
-export const speakText = async (text: string) => {
-  try {
-    if (currentAudioSource) {
-      currentAudioSource.stop();
-      currentAudioSource = null;
-    }
-
-    // Use environment variable if valid, otherwise fallback to the exported API_KEY
-    const key = (process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY') 
-      ? process.env.API_KEY 
-      : API_KEY;
-
-    const ai = new GoogleGenAI({ apiKey: key });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `تحدث بصوت حنون، واضح، وبطيء قليلاً باللغة العربية: ${text}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
-        },
-      },
-    });
-
-    const base64Audio = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
-    if (!base64Audio) return;
-
-    const ctx = initAudioCtx();
-    if (ctx.state === 'suspended') {
-      await ctx.resume();
-    }
-
-    const audioBuffer = await decodeAudioData(
-      decode(base64Audio),
-      ctx,
-      24000,
-      1
-    );
-
-    const source = ctx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(ctx.destination);
-    source.start();
-    currentAudioSource = source;
-  } catch (error) {
-    console.error("Audio playback error:", error);
-  }
-};
+// Queue System
+const speechQueue: { text: string; useChime: boolean }[] = [];
+let isProcessingQueue = false;
 
 export const stopSpeech = () => {
+  speechQueue.length = 0; // Clear queue
+  isProcessingQueue = false;
+  
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
   if (currentAudioSource) {
     try {
       currentAudioSource.stop();
     } catch (e) {}
     currentAudioSource = null;
   }
+};
+
+const processQueue = async () => {
+  if (speechQueue.length === 0) {
+    isProcessingQueue = false;
+    return;
+  }
+  
+  isProcessingQueue = true;
+  const { text, useChime } = speechQueue[0];
+  
+  try {
+    if (useChime) {
+      await playChime();
+    }
+    
+    await new Promise<void>((resolve) => {
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ar-EG';
+        utterance.rate = 0.9;
+        utterance.pitch = 1;
+        
+        const voices = window.speechSynthesis.getVoices();
+        const arabicVoice = voices.find(v => v.lang.includes('ar'));
+        if (arabicVoice) {
+          utterance.voice = arabicVoice;
+        }
+
+        utterance.onend = () => resolve();
+        utterance.onerror = (e) => {
+          console.error("Speech error", e);
+          resolve();
+        };
+        
+        window.speechSynthesis.speak(utterance);
+      } else {
+        console.warn("Browser does not support SpeechSynthesis");
+        resolve();
+      }
+    });
+  } catch (error) {
+    console.error("Audio playback error:", error);
+  } finally {
+    speechQueue.shift();
+    // Small delay between messages
+    setTimeout(() => processQueue(), 500);
+  }
+};
+
+export const playNotification = async (text: string, useChime: boolean = true) => {
+  speechQueue.push({ text, useChime });
+  if (!isProcessingQueue) {
+    processQueue();
+  }
+};
+
+export const speakText = async (text: string) => {
+  return playNotification(text, false);
 };

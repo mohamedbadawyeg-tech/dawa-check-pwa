@@ -1,17 +1,18 @@
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { initializeApp } from "firebase/app";
 import { 
   getFirestore, 
   doc, 
   onSnapshot, 
   setDoc, 
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  serverTimestamp,
+  enableIndexedDbPersistence
+} from "firebase/firestore";
 import { 
   getMessaging, 
   getToken, 
   onMessage 
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js";
+} from "firebase/messaging";
 import { AppState } from "../types";
 
 export const API_KEY = "AIzaSyCbjITpAZBfA-NItVOX6Hc3AJlet6EKk7E";
@@ -140,6 +141,7 @@ export const syncPatientData = async (patientId: string, data: AppState) => {
     const syncPayload = {
       patientName: data.patientName,
       patientAge: data.patientAge,
+      patientGender: data.patientGender || 'male',
       medications: data.medications || [],
       takenMedications: data.takenMedications || {},
       currentReport: data.currentReport,
@@ -147,6 +149,9 @@ export const syncPatientData = async (patientId: string, data: AppState) => {
       medicalHistorySummary: data.medicalHistorySummary,
       dietGuidelines: data.dietGuidelines,
       upcomingProcedures: data.upcomingProcedures || "",
+      labTests: data.labTests || [],
+      lastDailyTipDate: data.lastDailyTipDate || null,
+      dailyTipContent: data.dailyTipContent || "",
       lastUpdated: serverTimestamp()
     };
     
@@ -198,4 +203,19 @@ export const listenToPatient = (patientId: string, onUpdate: (data: Partial<AppS
 
 export const generateSyncId = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
+
+export const backupAdherenceHistory = async (patientId: string, dailyReports: AppState["dailyReports"]) => {
+  if (!patientId || !dailyReports) return;
+  const backupId = `adherence_${Date.now()}`;
+  const backupRef = doc(db, "patients", patientId, "backups", backupId);
+  try {
+    await setDoc(backupRef, {
+      type: "adherenceHistory",
+      createdAt: serverTimestamp(),
+      dailyReports
+    });
+  } catch (error) {
+    console.error("Adherence backup error:", error);
+  }
 };
