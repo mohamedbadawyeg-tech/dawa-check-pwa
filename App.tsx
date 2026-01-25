@@ -3268,7 +3268,7 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-4">
                           <div className={`p-3.5 rounded-2xl shadow-md ${state.darkMode ? 'bg-slate-800 border-slate-700' : cfg.color.split(' ')[0]}`}>{cfg.icon}</div>
                           <div>
-                            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200">{slotLabel}</h3>
+                            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200">{cfg.label}</h3>
                             <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1.5 w-fit mt-1">
                               <Clock className="w-3 h-3" /> {slotHourFormatted}
                             </span>
@@ -3278,7 +3278,7 @@ const App: React.FC = () => {
                           <button 
                             onClick={() => {
                               meds.forEach(m => handleSendReminder(m.name));
-                              alert(`تم إرسال تنبيهات للمريض بخصوص أدوية مجموعة: ${slotLabel}`);
+                              alert(`تم إرسال تنبيهات للمريض بخصوص أدوية مجموعة: ${cfg.label}`);
                             }}
                             className="bg-amber-500 hover:bg-amber-600 text-white p-3 rounded-2xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-2"
                             title="تنبيه للمجموعة بالكامل"
