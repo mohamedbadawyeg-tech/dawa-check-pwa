@@ -1148,13 +1148,27 @@ const App: React.FC = () => {
       const nowMs = Date.now();
       if (nowMs - lastLocalActionTime.current < 3000) return;
       setState(prev => {
-        const remoteSubset = makeJsonSafe({
-          m: remoteData.medications, tr: remoteData.takenMedications, cr: remoteData.currentReport,
-          dr: remoteData.dailyReports, rr: remoteData.remoteReminder, mh: remoteData.medicalHistorySummary, 
-          dg: remoteData.dietGuidelines, up: remoteData.upcomingProcedures, tip: remoteData.lastDailyTipDate,
-          labs: remoteData.labTests
+        // Calculate next values based on remoteData or fallback to prev
+        const nextMedications = remoteData.medications || prev.medications;
+        const nextTaken = remoteData.takenMedications || prev.takenMedications;
+        const nextReport = remoteData.currentReport || prev.currentReport;
+        const nextDailyReports = remoteData.dailyReports || prev.dailyReports;
+        const nextRemoteReminder = remoteData.remoteReminder || prev.remoteReminder;
+        const nextHistorySummary = remoteData.medicalHistorySummary || prev.medicalHistorySummary;
+        const nextDietGuidelines = remoteData.dietGuidelines || prev.dietGuidelines;
+        const nextUpcomingProcedures = remoteData.upcomingProcedures || prev.upcomingProcedures;
+        const nextLabTests = remoteData.labTests || prev.labTests || [];
+        const nextLastDailyTipDate = remoteData.lastDailyTipDate || prev.lastDailyTipDate;
+
+        // Construct subsets for hash comparison
+        const nextSubset = makeJsonSafe({
+          m: nextMedications, tr: nextTaken, cr: nextReport,
+          dr: nextDailyReports, rr: nextRemoteReminder, mh: nextHistorySummary, 
+          dg: nextDietGuidelines, up: nextUpcomingProcedures, tip: nextLastDailyTipDate,
+          labs: nextLabTests
         });
-        const remoteHash = JSON.stringify(remoteSubset);
+        const nextHash = JSON.stringify(nextSubset);
+
         const localSubset = makeJsonSafe({
           m: prev.medications, tr: prev.takenMedications, cr: prev.currentReport,
           dr: prev.dailyReports, rr: prev.remoteReminder, mh: prev.medicalHistorySummary, 
@@ -1162,23 +1176,24 @@ const App: React.FC = () => {
           labs: prev.labTests
         });
         const localHash = JSON.stringify(localSubset);
-        if (remoteHash !== localHash) {
+
+        if (nextHash !== localHash) {
           isDirty.current = false;
-          lastSyncedHash.current = remoteHash;
+          lastSyncedHash.current = nextHash;
           setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
           return {
             ...prev,
-            medications: remoteData.medications || prev.medications,
-            currentReport: remoteData.currentReport || prev.currentReport,
-            takenMedications: remoteData.takenMedications || prev.takenMedications,
-            dailyReports: remoteData.dailyReports || prev.dailyReports,
+            medications: nextMedications,
+            currentReport: nextReport,
+            takenMedications: nextTaken,
+            dailyReports: nextDailyReports,
             patientName: remoteData.patientName || prev.patientName,
-            remoteReminder: remoteData.remoteReminder || prev.remoteReminder,
-            medicalHistorySummary: remoteData.medicalHistorySummary || prev.medicalHistorySummary,
-            dietGuidelines: remoteData.dietGuidelines || prev.dietGuidelines,
-            upcomingProcedures: remoteData.upcomingProcedures || prev.upcomingProcedures,
-            labTests: remoteData.labTests || prev.labTests || [],
-            lastDailyTipDate: remoteData.lastDailyTipDate || prev.lastDailyTipDate,
+            remoteReminder: nextRemoteReminder,
+            medicalHistorySummary: nextHistorySummary,
+            dietGuidelines: nextDietGuidelines,
+            upcomingProcedures: nextUpcomingProcedures,
+            labTests: nextLabTests,
+            lastDailyTipDate: nextLastDailyTipDate,
             dailyTipContent: remoteData.dailyTipContent || prev.dailyTipContent,
             caregiverHistory: (() => {
                 if (prev.caregiverMode && prev.caregiverTargetId && remoteData.patientName && prev.caregiverTargetId.length <= 8) {
@@ -1203,8 +1218,8 @@ const App: React.FC = () => {
       if (!targetId || !isOnline || !isDirty.current) return;
       const safeStateSubset = makeJsonSafe({
         m: state.medications, tr: state.takenMedications, cr: state.currentReport,
-        dr: state.dailyReports, mh: state.medicalHistorySummary, dg: state.dietGuidelines,
-        up: state.upcomingProcedures, tip: state.lastDailyTipDate
+        dr: state.dailyReports, rr: state.remoteReminder, mh: state.medicalHistorySummary, dg: state.dietGuidelines,
+        up: state.upcomingProcedures, tip: state.lastDailyTipDate, labs: state.labTests
       });
       const currentHash = JSON.stringify(safeStateSubset);
       if (currentHash === lastSyncedHash.current) { isDirty.current = false; return; }
@@ -1218,7 +1233,7 @@ const App: React.FC = () => {
     };
     const timer = setTimeout(sync, 2500);
     return () => clearTimeout(timer);
-  }, [state.medications, state.currentReport, state.takenMedications, state.dailyReports, state.medicalHistorySummary, state.dietGuidelines, state.upcomingProcedures, isOnline, state.caregiverMode, state.caregiverTargetId, state.lastDailyTipDate]);
+  }, [state.medications, state.currentReport, state.takenMedications, state.dailyReports, state.medicalHistorySummary, state.dietGuidelines, state.upcomingProcedures, isOnline, state.caregiverMode, state.caregiverTargetId, state.lastDailyTipDate, state.remoteReminder, state.labTests]);
 
   useEffect(() => {
     if (state.caregiverMode) return;
@@ -1786,6 +1801,76 @@ const App: React.FC = () => {
 
     const lower = text.toLowerCase();
     
+    // 1. Add Medication Command (New)
+    if (lower.includes('أضف دواء') || lower.includes('اضافة دواء') || lower.includes('جدول دواء') || lower.includes('ذكرني بـ')) {
+      let medName = '';
+      if (lower.includes('أضف دواء')) medName = text.substring(text.indexOf('أضف دواء') + 8).trim();
+      else if (lower.includes('اضافة دواء')) medName = text.substring(text.indexOf('اضافة دواء') + 10).trim();
+      else if (lower.includes('جدول دواء')) medName = text.substring(text.indexOf('جدول دواء') + 9).trim();
+      else if (lower.includes('ذكرني بـ')) medName = text.substring(text.indexOf('ذكرني بـ') + 8).trim();
+
+      setFrequencyMode('single');
+      setRecurringCount(2);
+      setRecurringSlots(['morning-fasting', 'night']);
+      setEditingMed({ 
+          name: medName, 
+          dosage: '', 
+          timeSlot: 'morning-fasting', 
+          notes: '', 
+          isCritical: false, 
+          category: 'other', 
+          frequencyLabel: '', 
+          stock: 0, 
+          refillUnit: 'box' 
+      });
+      setIsMedManagerOpen(true);
+      speakText(medName ? `تم فتح شاشة إضافة الدواء ${medName}` : "تم فتح شاشة إضافة دواء جديد");
+      return;
+    }
+
+    // 2. Navigation Commands (New)
+    if (lower.includes('إعدادات') || lower.includes('اعدادات')) {
+        setIsSettingsOpen(true);
+        speakText("تم فتح الإعدادات");
+        return;
+    }
+    if (lower.includes('الرئيسية') || lower.includes('الصفحة الرئيسية')) {
+        setIsSettingsOpen(false);
+        setIsCalendarOpen(false);
+        setIsLabsModalOpen(false);
+        setIsMedManagerOpen(false);
+        setIsTourOpen(false);
+        speakText("تم الرجوع للصفحة الرئيسية");
+        return;
+    }
+    if (lower.includes('تقويم') || lower.includes('سجل الالتزام') || lower.includes('النتيجة')) {
+        setIsCalendarOpen(true);
+        speakText("تم فتح سجل الالتزام");
+        return;
+    }
+    if (lower.includes('تحليل') || lower.includes('مختبر') || lower.includes('معمل')) {
+        setIsLabsModalOpen(true);
+        speakText("تم فتح سجل التحاليل");
+        return;
+    }
+    if (lower.includes('صيدلية') || lower.includes('دواء اونلاين') || lower.includes('طلب دواء')) {
+        setIsPharmacyModalOpen(true);
+        speakText("تم فتح الصيدلية");
+        return;
+    }
+    if (lower.includes('عائلة') || lower.includes('شات') || lower.includes('محادثة') || lower.includes('أسرة')) {
+        setIsFamilyChatOpen(true);
+        speakText("تم فتح شات العائلة");
+        return;
+    }
+
+    // 3. Action Commands (New)
+    if (lower.includes('نظام غذائي') || lower.includes('دايت')) {
+        handleGenerateDiet();
+        return;
+    }
+
+    // 4. Existing Logic (Mark as Taken)
     if (lower.includes('أخدت') || lower.includes('تناولت') || lower.includes('اخذت')) {
       const med = state.medications.find(m => lower.includes(m.name.toLowerCase()));
       if (med) {
@@ -1848,8 +1933,8 @@ const App: React.FC = () => {
         alert("لم أتمكن من التعرف على اسم الدواء في جملتك. حاول ذكر الاسم بوضوح.");
         speakText("لم أتعرف على اسم الدواء");
       }
-    } else if (lower.includes('صداع') || lower.includes('تعبان') || lower.includes('ألم') || lower.includes('دايخ')) {
-      const today = new Date().toISOString().split('T')[0];
+    } else if (lower.includes('صداع') || lower.includes('تعبان') || lower.includes('ألم') || lower.includes('دايخ') || lower.includes('أعراض')) {
+      // const today = new Date().toISOString().split('T')[0]; // Already defined in component scope
       
       lastLocalActionTime.current = Date.now();
       isDirty.current = true;
@@ -1885,7 +1970,7 @@ const App: React.FC = () => {
       alert("تم تسجيل الأعراض في تقرير اليوم.");
       speakText("سلامتك الف سلامة، سجلت تعبك في التقرير");
     } else {
-      alert(`لم أتعرف على الأمر: "${text}"\nجرب قول: "أخدت دواء الضغط" أو "حاسس بصداع"`);
+      alert(`لم أتعرف على الأمر: "${text}"\nجرب قول: "أضف دواء بندول" أو "أخدت دواء الضغط" أو "افتح التقويم"`);
     }
   };
 
@@ -3019,10 +3104,17 @@ const App: React.FC = () => {
   }
 
   const lateMeds = activeMedications.filter(med => {
-    const isTaken = !!state.takenMedications[med.id];
-    const slotTimeStr = state.slotHours?.[med.timeSlot] || SLOT_HOURS[med.timeSlot];
-    const slotHourNum = parseInt(slotTimeStr.toString().split(':')[0]);
-    return !isTaken && currentHour >= slotHourNum;
+    if (state.takenMedications[med.id]) return false;
+    const val = state.slotHours?.[med.timeSlot] ?? SLOT_HOURS[med.timeSlot];
+    let h = 0, min = 0;
+    if (typeof val === 'number') { h = val; min = 0; }
+    else if (typeof val === 'string') { const parts = val.split(':'); h = parseInt(parts[0]); min = parseInt(parts[1] || '0'); }
+    else return false;
+
+    const slotTime = new Date();
+    slotTime.setHours(h, min, 0, 0);
+    const diff = now.getTime() - slotTime.getTime();
+    return diff > 30 * 60 * 1000 && diff < 12 * 60 * 60 * 1000;
   });
 
   return (
@@ -4687,50 +4779,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Persistent Late Medication Overlay */}
-      {state.medications.filter(m => {
-        if (state.takenMedications[m.id]) return false;
-        const val = state.slotHours?.[m.timeSlot] ?? SLOT_HOURS[m.timeSlot];
-        let h = 0, min = 0;
-        if (typeof val === 'number') { h = val; min = 0; }
-        else if (typeof val === 'string') { const parts = val.split(':'); h = parseInt(parts[0]); min = parseInt(parts[1] || '0'); }
-        else return false;
-        
-        const slotTime = new Date();
-        slotTime.setHours(h, min, 0, 0);
-        const diff = now.getTime() - slotTime.getTime();
-        return diff > 30 * 60 * 1000 && diff < 12 * 60 * 60 * 1000;
-      }).length > 0 && (
-        <div className="fixed top-24 right-0 z-[200] animate-slide-in-right">
-          <div className="bg-red-600 text-white p-4 rounded-l-2xl shadow-2xl max-w-[280px] border-l-4 border-white/20 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-black text-lg flex items-center gap-2 animate-pulse"><AlertTriangle className="w-5 h-5 text-yellow-300"/> تنبيه هام</h3>
-            </div>
-            <p className="text-sm font-bold mb-4 leading-relaxed">
-              تأخرت في تناول {state.medications.filter(m => {
-                   if (state.takenMedications[m.id]) return false;
-                   const val = state.slotHours?.[m.timeSlot] ?? SLOT_HOURS[m.timeSlot];
-                   let h = 0, min = 0;
-                   if (typeof val === 'number') { h = val; min = 0; }
-                   else if (typeof val === 'string') { const parts = val.split(':'); h = parseInt(parts[0]); min = parseInt(parts[1] || '0'); }
-                   else return false;
-
-                   const slotTime = new Date();
-                   slotTime.setHours(h, min, 0, 0);
-                   const diff = now.getTime() - slotTime.getTime();
-                   return diff > 30 * 60 * 1000 && diff < 12 * 60 * 60 * 1000;
-              }).length} دواء. يرجى التناول الآن!
-            </p>
-            <button 
-              onClick={() => {
-                 document.getElementById('medication-list')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="w-full py-2.5 bg-white text-red-600 rounded-xl font-black text-sm shadow-md hover:bg-red-50 transition-colors"
-            >
-              عرض الأدوية
-            </button>
-          </div>
-        </div>
-      )}
+      <DraggableLateAlert lateMeds={lateMeds} onMarkAsTaken={toggleMedication} />
 
 
       {/* Loading Overlay */}
