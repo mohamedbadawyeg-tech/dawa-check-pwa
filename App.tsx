@@ -326,6 +326,7 @@ const App: React.FC = () => {
   const isDirty = useRef<boolean>(false);
   const lastHandledReminderTime = useRef<number>(0);
   const adherenceJsonInputRef = useRef<HTMLInputElement | null>(null);
+  const hasGeneratedMotivationRef = useRef<boolean>(false);
 
   const [state, setState] = useState<AppState>(() => {
     const saved = localStorage.getItem('health_track_v6');
@@ -417,6 +418,7 @@ const App: React.FC = () => {
     };
   });
 
+  const [motivationMessage, setMotivationMessage] = useState<string>('');
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(state.aiAnalysisResult || null);
   const [user, setUser] = useState<User | null>(() => {
     try {
@@ -746,7 +748,7 @@ const App: React.FC = () => {
     if (state.caregiverMode) return;
     if (hasGeneratedMotivationRef.current) return;
     hasGeneratedMotivationRef.current = true;
-    const line = generateMotivationMessage(state, new Date());
+    const line = computeDailyQuickTip(state);
     setMotivationMessage(line);
   }, [state.caregiverMode]);
 
