@@ -29,7 +29,9 @@ jobs:
 
       - name: Add iOS Platform
         # Creates the ios directory since it's not in the repo
-        run: npx cap add ios
+        # We allow failure here because 'pod install' will fail due to low deployment target
+        # We fix the target in the next step and then sync again
+        run: npx cap add ios || true
 
       - name: Update iOS Deployment Target
         run: |

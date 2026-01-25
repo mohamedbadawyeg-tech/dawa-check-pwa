@@ -1243,7 +1243,8 @@ const App: React.FC = () => {
 
   const activeMedications = state.medications;
   const activeTakenMeds = state.takenMedications;
-  const activeReport = state.currentReport || DEFAULT_REPORT;
+  // Ensure activeReport has all necessary fields by merging with defaults
+  const activeReport = { ...DEFAULT_REPORT, ...(state.currentReport || {}) };
   const activeName = state.patientName;
   const activeDailyReports = state.dailyReports;
   const displayedDietPlan = aiDietPlan || (selectedHistoryDate ? activeDailyReports[selectedHistoryDate]?.report?.aiDietPlan : activeDailyReports[today]?.report?.aiDietPlan);
@@ -3334,7 +3335,7 @@ const App: React.FC = () => {
 
               <section onClick={() => setIsMedicalSummaryOpen(true)} className="cursor-pointer bg-gradient-to-br from-white to-blue-50/40 dark:from-slate-900 dark:to-slate-900/80 rounded-[2.8rem] p-8 shadow-xl border-2 border-blue-100 dark:border-blue-900/20 relative group transition-all">
                 <div className="flex items-center justify-between mb-6">
-                   <div className="bg-blue-600 p-5 rounded-3xl text-white shadow-xl shadow-blue-500/30"><FileText className="w-8 h-8" /></div>
+                   <div className="bg-blue-600 p-5 rounded-3xl text-white shadow-xl shadow-blue-500/30"><Heart className="w-8 h-8" /></div>
                    <div className="text-right">
                      <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100 mb-1">ملخص الحالة الطبية</h2>
                      <p className="text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase flex items-center justify-end gap-1.5"><Sparkles className="w-3 h-3"/> {state.caregiverMode ? 'تعديل البيانات الطبية' : 'عرض الملخص الطبي'}</p>
