@@ -3091,39 +3091,6 @@ const App: React.FC = () => {
 
           <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div id="medication-list" className="lg:col-span-5 space-y-4 lg:order-1">
-            {/* Inline Low Stock Alert (Restored) */}
-            {state.medications.some(m => (typeof m.stock === 'number' ? m.stock : 0) < 2) && (
-               <div className="bg-red-50 dark:bg-red-900/10 border-r-4 border-red-500 p-5 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500 shadow-sm">
-                  <div className="flex items-center gap-4 text-right">
-                     <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-xl text-red-600 dark:text-red-400">
-                        <AlertTriangle className="w-6 h-6 animate-pulse" />
-                     </div>
-                     <div>
-                        <h3 className="font-black text-red-800 dark:text-red-200 text-sm md:text-base mb-1">تنبيه: مخزون الدواء منخفض</h3>
-                        <p className="text-xs font-bold text-red-600 dark:text-red-400">بعض أدويتك أوشكت على النفاذ، يرجى طلبها الآن.</p>
-                     </div>
-                  </div>
-                  <button
-                     onClick={() => {
-                        const lowStockMeds = state.medications.filter(m => (typeof m.stock === 'number' ? m.stock : 0) < 2);
-                        const uniqueMeds = Array.from(new Set(lowStockMeds.map(m => m.name)))
-                          .map(name => lowStockMeds.find(m => m.name === name))
-                          .filter((m): m is Medication => !!m);
-                        
-                        const medList = uniqueMeds.map(m => {
-                          const unitLabel = m.refillUnit === 'strip' ? 'شريط واحد' : m.refillUnit === 'bottle' ? 'زجاجة واحدة' : 'علبة واحدة';
-                          return `- ${m.name} - ${unitLabel}`;
-                        }).join('\n');
-                        const message = `السلام عليكم، أحتاج طلب الأدوية التالية لانتهاء المخزون:\n${medList}`;
-                        setPendingOrderMessage(message);
-                        setIsOrderChoiceOpen(true);
-                     }}
-                     className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-black text-xs shadow-lg shadow-red-500/20 active:scale-95 transition-all whitespace-nowrap"
-                  >
-                     طلب النواقص
-                  </button>
-               </div>
-            )}
             <section id="smart-analysis-card" className="bg-slate-900 dark:bg-slate-900 rounded-[2.8rem] p-8 text-white shadow-2xl relative overflow-hidden border-b-[10px] border-blue-600 mb-4">
                 <div className="flex items-center justify-between mb-8">
                   <div className="bg-white/10 p-5 rounded-2xl"><BrainCircuit className="w-9 h-9 text-blue-400" /></div>
@@ -3207,39 +3174,7 @@ const App: React.FC = () => {
                 )}
               </section>
 
-            {/* Inline Low Stock Alert (Moved here) */}
-            {state.medications.some(m => (typeof m.stock === 'number' ? m.stock : 0) < 2) && (
-               <div className="bg-red-50 dark:bg-red-900/10 border-r-4 border-red-500 p-5 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500 shadow-sm">
-                  <div className="flex items-center gap-4 text-right">
-                     <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-xl text-red-600 dark:text-red-400">
-                        <AlertTriangle className="w-6 h-6 animate-pulse" />
-                     </div>
-                     <div>
-                        <h3 className="font-black text-red-800 dark:text-red-200 text-sm md:text-base mb-1">تنبيه: مخزون الدواء منخفض</h3>
-                        <p className="text-xs font-bold text-red-600 dark:text-red-400">بعض أدويتك أوشكت على النفاذ، يرجى طلبها الآن.</p>
-                     </div>
-                  </div>
-                  <button
-                     onClick={() => {
-                        const lowStockMeds = state.medications.filter(m => (typeof m.stock === 'number' ? m.stock : 0) < 2);
-                        const uniqueMeds = Array.from(new Set(lowStockMeds.map(m => m.name)))
-                          .map(name => lowStockMeds.find(m => m.name === name))
-                          .filter((m): m is Medication => !!m);
-                        
-                        const medList = uniqueMeds.map(m => {
-                          const unitLabel = m.refillUnit === 'strip' ? 'شريط واحد' : m.refillUnit === 'bottle' ? 'زجاجة واحدة' : 'علبة واحدة';
-                          return `- ${m.name} - ${unitLabel}`;
-                        }).join('\n');
-                        const message = `السلام عليكم، أحتاج طلب الأدوية التالية لانتهاء المخزون:\n${medList}`;
-                        setPendingOrderMessage(message);
-                        setIsOrderChoiceOpen(true);
-                     }}
-                     className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-black text-xs shadow-lg shadow-red-500/20 active:scale-95 transition-all whitespace-nowrap"
-                  >
-                     طلب النواقص
-                  </button>
-               </div>
-            )}
+
 
               <div className="flex items-center justify-between px-2">
                 <h2 className="text-2xl font-black text-slate-800 dark:text-slate-200 flex items-center gap-3">جدول الأدوية <ClipboardList className="w-7 h-7 text-blue-500" /></h2>
