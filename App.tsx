@@ -1636,7 +1636,7 @@ const App: React.FC = () => {
     openWhatsApp(message);
   };
 
-  const exportAdherenceJson = () => {
+  const exportDailyReportsJson = () => {
     const patientId = state.caregiverMode ? state.caregiverTargetId || state.patientId : state.patientId;
     const payload = {
       patientId,
@@ -1658,7 +1658,7 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportAdherenceJson = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const importDailyReportsJson = (event: React.ChangeEvent<HTMLInputElement>) => {
     const input = event.target;
     const file = input.files?.[0];
     if (!file) return;
