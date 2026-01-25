@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { AppState } from '../types';
-import { X, Settings, Copy, Bell, Cloud, Sparkles, Download, Upload, LogIn, LogOut, Clock } from 'lucide-react';
+import { X, Settings, Copy, Bell, Cloud, Sparkles, Download, Upload, LogIn, LogOut, Clock, Loader2, Link as LinkIcon } from 'lucide-react';
 import { TIME_SLOT_CONFIG } from '../constants';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
@@ -41,6 +41,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const handleFullBackup = async () => {
     const dataStr = JSON.stringify(state, null, 2);
@@ -130,24 +131,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {state.caregiverMode && (
             <div className="space-y-4 text-right">
               <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 mr-2 uppercase">ربط حساب مريض (ID)</label>
-              <input 
-                type="text" 
-                placeholder="أدخل رمز المريض" 
-                value={state.caregiverTargetId || ''} 
-                onChange={(e) => {
-                  const val = e.target.value.toUpperCase();
-                  updateState({ caregiverTargetId: val });
-                  // Try to resolve short code to full ID automatically
-                  if (val.length === 6) {
-                     resolvePatientId(val).then(resolved => {
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="أدخل رمز المريض" 
+                  value={state.caregiverTargetId || ''} 
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase();
+                    updateState({ caregiverTargetId: val });
+                  }} 
+                  className="w-full p-6 pl-24 bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-100 dark:border-emerald-900/30 focus:border-emerald-500 rounded-[1.8rem] font-black text-3xl text-center uppercase shadow-md dark:text-white" 
+                />
+                <button
+                  onClick={async () => {
+                    const val = state.caregiverTargetId;
+                    if (!val) return;
+                    setIsVerifying(true);
+                    try {
+                      if (val.length === 6) {
+                        const resolved = await resolvePatientId(val);
                         if (resolved !== val) {
-                           updateState({ caregiverTargetId: resolved });
+                          updateState({ caregiverTargetId: resolved });
+                          alert("تم العثور على المريض وربط الحساب بنجاح ✅");
+                        } else {
+                          alert("لم يتم العثور على مريض بهذا الرمز ❌\nتأكد من صحة الرمز.");
                         }
-                     });
-                  }
-                }} 
-                className="w-full p-6 bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-100 dark:border-emerald-900/30 focus:border-emerald-500 rounded-[1.8rem] font-black text-3xl text-center uppercase shadow-md dark:text-white" 
-              />
+                      } else if (val.length > 6) {
+                        alert("تم حفظ معرف المريض ✅");
+                      } else {
+                         alert("الرمز قصير جداً ⚠️");
+                      }
+                    } catch (e) {
+                      alert("حدث خطأ أثناء التحقق ❌");
+                    } finally {
+                      setIsVerifying(false);
+                    }
+                  }}
+                  className="absolute left-3 top-3 bottom-3 aspect-square bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl flex items-center justify-center transition-colors shadow-lg shadow-emerald-500/20"
+                >
+                  {isVerifying ? <Loader2 className="w-6 h-6 animate-spin" /> : <LinkIcon className="w-6 h-6" />}
+                </button>
+              </div>
               
               {state.caregiverHistory && state.caregiverHistory.length > 0 && (
                 <div className="mt-2">
