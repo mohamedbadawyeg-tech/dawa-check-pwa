@@ -7,6 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { User } from '../services/authService';
 import { ScrollHint } from './ScrollHint';
+import { resolvePatientId } from '../services/firebaseService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -129,7 +130,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {state.caregiverMode && (
             <div className="space-y-4 text-right">
               <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 mr-2 uppercase">ربط حساب مريض (ID)</label>
-              <input type="text" placeholder="أدخل رمز المريض" value={state.caregiverTargetId || ''} onChange={(e) => updateState({ caregiverTargetId: e.target.value.toUpperCase() })} className="w-full p-6 bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-100 dark:border-emerald-900/30 focus:border-emerald-500 rounded-[1.8rem] font-black text-3xl text-center uppercase shadow-md dark:text-white" />
+              <input 
+                type="text" 
+                placeholder="أدخل رمز المريض" 
+                value={state.caregiverTargetId || ''} 
+                onChange={(e) => {
+                  const val = e.target.value.toUpperCase();
+                  updateState({ caregiverTargetId: val });
+                  // Try to resolve short code to full ID automatically
+                  if (val.length === 6) {
+                     resolvePatientId(val).then(resolved => {
+                        if (resolved !== val) {
+                           updateState({ caregiverTargetId: resolved });
+                        }
+                     });
+                  }
+                }} 
+                className="w-full p-6 bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-100 dark:border-emerald-900/30 focus:border-emerald-500 rounded-[1.8rem] font-black text-3xl text-center uppercase shadow-md dark:text-white" 
+              />
               
               {state.caregiverHistory && state.caregiverHistory.length > 0 && (
                 <div className="mt-2">
@@ -158,8 +176,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="p-7 bg-blue-50/50 dark:bg-blue-900/10 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/30 text-right space-y-5">
             <p className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">رمز المزامنة (ID)</p>
             <div className="flex items-center gap-4">
-              <button onClick={copyPatientId} className="p-5 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-2xl border dark:border-slate-700 active:scale-90 shadow-sm"><Copy className="w-6 h-6"/></button>
-              <div className="flex-1 p-5 bg-white dark:bg-slate-800 border-2 border-blue-100 dark:border-blue-900/30 rounded-[1.5rem] text-center font-black text-3xl text-slate-800 dark:text-slate-100 uppercase tabular-nums shadow-inner">{state.patientId}</div>
+              <button onClick={() => { navigator.clipboard.writeText(state.syncCode || state.patientId); alert("تم نسخ الرمز بنجاح ✅"); }} className="p-5 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-2xl border dark:border-slate-700 active:scale-90 shadow-sm"><Copy className="w-6 h-6"/></button>
+              <div className="flex-1 p-5 bg-white dark:bg-slate-800 border-2 border-blue-100 dark:border-blue-900/30 rounded-[1.5rem] text-center font-black text-3xl text-slate-800 dark:text-slate-100 uppercase tabular-nums shadow-inner">{state.syncCode || state.patientId}</div>
             </div>
           </div>
           <div className="space-y-4 text-right">

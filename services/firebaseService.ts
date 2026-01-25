@@ -93,6 +93,60 @@ export const generateSyncId = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
 
+export const getOrGenerateShortCode = async (uid: string): Promise<string> => {
+  try {
+    // 1. Check if user already has a short code
+    const userCodeRef = ref(db, `users/${uid}/syncCode`);
+    const snapshot = await get(userCodeRef);
+    if (snapshot.exists()) {
+      return snapshot.val();
+    }
+
+    // 2. Generate new unique code
+    let code = '';
+    let isUnique = false;
+    let attempts = 0;
+
+    while (!isUnique && attempts < 5) {
+      code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const codeLookupRef = ref(db, `users_lookup/${code}`);
+      const codeSnapshot = await get(codeLookupRef);
+      if (!codeSnapshot.exists()) {
+        isUnique = true;
+      }
+      attempts++;
+    }
+
+    if (!isUnique) throw new Error("Failed to generate unique code");
+
+    // 3. Save mapping
+    await set(ref(db, `users_lookup/${code}`), uid);
+    await set(ref(db, `users/${uid}/syncCode`), code);
+
+    return code;
+  } catch (e) {
+    console.error("Error generating short code", e);
+    return uid; // Fallback to UID
+  }
+};
+
+export const resolvePatientId = async (inputCode: string): Promise<string> => {
+  // If input looks like a short code (6 chars, alphanumeric), try to lookup
+  if (inputCode.length === 6 && /^[A-Z0-9]+$/.test(inputCode)) {
+      try {
+          const codeRef = ref(db, `users_lookup/${inputCode}`);
+          const snapshot = await get(codeRef);
+          if (snapshot.exists()) {
+              return snapshot.val();
+          }
+      } catch (e) {
+          console.error("Error resolving short code", e);
+      }
+  }
+  // Default: assume it is a full UID
+  return inputCode;
+};
+
 export const backupAdherenceHistory = async (patientId: string, data: any) => {
   console.log(`[Backup] Backing up data for ${patientId}`);
   

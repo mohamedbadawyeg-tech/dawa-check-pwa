@@ -35,8 +35,9 @@ export const initializePurchases = async () => {
 export const checkSubscriptionStatus = async (): Promise<SubscriptionStatus> => {
   try {
     // DEV MODE: Always active in development environment
-    if (import.meta.env.DEV) {
-       console.log("DEV MODE: Subscription mocked as active");
+    // OR if we want to enable mock for trial purposes in release builds too
+    if (import.meta.env.DEV || true) { // Forced TRUE for trial purposes as requested
+       console.log("DEV/MOCK MODE: Subscription mocked as active");
        return { isActive: true, expirationDate: new Date(Date.now() + 86400000).toISOString(), customerInfo: {} };
     }
 

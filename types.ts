@@ -95,6 +95,7 @@ export interface AppState {
   patientId: string;
   caregiverMode: boolean;
   caregiverTargetId: string | null;
+  syncCode?: string;
   slotHours: Record<TimeSlot, string>;
   aiSubscriptionActive?: boolean;
   medications: Medication[];
