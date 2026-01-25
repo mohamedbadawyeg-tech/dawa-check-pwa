@@ -943,10 +943,10 @@ const App: React.FC = () => {
       if (title) {
         new Notification(title, { 
           body, 
-          icon: 'https://cdn-icons-png.flaticon.com/512/3063/3063176.png' 
+          icon: '/icons/sehaty-192.png' 
         });
         
-        if (!isMuted && body && !state.caregiverMode && state.aiSubscriptionActive) { 
+        if (!isMuted && body && !state.caregiverMode && state.aiSubscriptionActive) {  
            playChime().then(() => speakText(body)); 
         }
       }
@@ -1077,8 +1077,8 @@ const App: React.FC = () => {
           navigator.serviceWorker.ready.then(reg => {
             reg.showNotification(title, {
               body,
-              icon: 'https://cdn-icons-png.flaticon.com/512/3063/3063176.png',
-              badge: 'https://cdn-icons-png.flaticon.com/512/3063/3063176.png',
+              icon: '/icons/sehaty-192.png',
+              badge: '/icons/sehaty-192.png',
               vibrate: [200, 100, 200],
               tag: 'medication-group',
               renotify: true
