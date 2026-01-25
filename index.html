@@ -11,7 +11,7 @@
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="./manifest.json" />
-    <link rel="apple-touch-icon" href="/icons/sehaty-192.png">
+    <link rel="apple-touch-icon" href="/icons/sehaty-512.png">
     
     <title>صحتي | مساعد الأدوية الذكي</title>
     
@@ -96,6 +96,13 @@
       }
       .shake-on-late {
         animation: shake-gentle 4s infinite ease-in-out;
+      }
+      @keyframes slide-in-right {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      .animate-slide-in-right {
+        animation: slide-in-right 0.7s ease-out forwards;
       }
       #root {
         min-height: 100vh;

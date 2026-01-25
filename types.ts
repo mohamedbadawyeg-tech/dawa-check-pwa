@@ -20,7 +20,7 @@ export interface Medication {
   category?: 'pressure' | 'diabetes' | 'blood-thinner' | 'antibiotic' | 'stomach' | 'other';
   sideEffects?: string[]; 
   stock?: number;
-  reorderUnit?: 'pack' | 'strip';
+  refillUnit?: 'strip' | 'box' | 'bottle' | 'other';
 }
 
 export interface HealthReport {
@@ -40,6 +40,15 @@ export interface HealthReport {
   heartRate?: number;
   waterIntake?: number;
   mood?: 'happy' | 'calm' | 'anxious' | 'sad' | '';
+  aiDietPlan?: string;
+}
+
+export interface LabTest {
+  id: string;
+  name: string;
+  date: string;
+  result: string;
+  notes?: string;
 }
 
 export interface LabTest {
@@ -56,13 +65,38 @@ export interface DayHistory {
   summary?: string;
 }
 
+export interface Procedure {
+  id: string;
+  text: string;
+  date: string;
+  completed: boolean;
+}
+
+export interface Diagnosis {
+  id: string;
+  condition: string;
+  date: string;
+  doctorName: string;
+  notes?: string;
+}
+
+export interface Message {
+  id: string;
+  sender: string;
+  message: string;
+  timestamp: number;
+}
+
 export interface AppState {
   patientName: string;
   patientAge: number;
+  patientLocation?: string;
   patientGender?: 'male' | 'female';
   patientId: string;
   caregiverMode: boolean;
   caregiverTargetId: string | null;
+  slotHours: Record<TimeSlot, string>;
+  aiSubscriptionActive?: boolean;
   medications: Medication[];
   takenMedications: Record<string, boolean>;
   notificationsEnabled: boolean;
@@ -83,15 +117,27 @@ export interface AppState {
   currentReport: HealthReport;
   medicalHistorySummary: string;
   dietGuidelines: string;
-  upcomingProcedures: string; 
+  upcomingProcedures: Procedure[]; 
+  diagnoses?: Diagnosis[];
   labTests?: LabTest[];
+  pharmacyPhone?: string; // Add pharmacy phone number
+  doctorPhone?: string; // Add doctor phone number
+  bloodType?: string; // Add blood type
+  caregiverHistory?: Array<{ id: string; name: string; lastUsed: string }>;
+  familyChat?: Array<{ id: string; sender: string; message: string; timestamp: number }>; // Family chat messages
+  aiAnalysisResult?: AIAnalysisResult;
+  labTestsDraft?: {
+    id?: string;
+    name?: string;
+    date?: string;
+    result?: string;
+    notes?: string;
+  };
   remoteReminder?: {
     timestamp: number;
     medName: string;
   };
-  lastDiagnosis?: string;
-  diagnosedBy?: string;
-  timeSlotSettings?: Record<string, { label: string, hour: number }>;
+  familyMessages?: Message[];
 }
 
 export interface AIAnalysisResult {
@@ -99,5 +145,7 @@ export interface AIAnalysisResult {
   recommendations: string[];
   warnings: string[];
   positivePoints: string[];
+  foodInteractions: string[];
+  allowedFoods: string[];
   potentialSideEffects?: string[];
 }

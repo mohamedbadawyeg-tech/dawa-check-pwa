@@ -13,12 +13,12 @@ const assetsToCache = [
 
 // Firebase Config
 const firebaseConfig = {
-  apiKey: "AIzaSyCbjITpAZBfA-NItVOX6Hc3AJlet6EKk7E",
-  authDomain: "eladwya-92754604-eb321.firebaseapp.com",
-  projectId: "eladwya-92754604-eb321",
-  storageBucket: "eladwya-92754604-eb321.firebasestorage.app",
-  messagingSenderId: "319834803886",
-  appId: "1:319834803886:web:6a71f628e1a20d01c5a73f"
+   apiKey: "AIzaSyA19OCKhLfBnN-Z_7qeat5Skj6uhk4pP88",
+   authDomain: "sahaty-app-68685.firebaseapp.com",
+   projectId: "sahaty-app-68685",
+   storageBucket: "sahaty-app-68685.firebasestorage.app",
+   messagingSenderId: "608914168606",
+   appId: "1:608914168606:web:c939123ebb73e9e367070f"
 };
 
 firebase.initializeApp(firebaseConfig);

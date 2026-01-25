@@ -1,222 +1,138 @@
 
-import { initializeApp } from "firebase/app";
-import { 
-  getFirestore, 
-  doc, 
-  onSnapshot, 
-  setDoc, 
-  serverTimestamp,
-  enableIndexedDbPersistence
-} from "firebase/firestore";
-import { 
-  getMessaging, 
-  getToken, 
-  onMessage 
-} from "firebase/messaging";
 import { AppState } from "../types";
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, set, onValue, push, serverTimestamp, child, get } from "firebase/database";
 
-export const API_KEY = "AIzaSyCbjITpAZBfA-NItVOX6Hc3AJlet6EKk7E";
+export const API_KEY = "AIzaSyA19OCKhLfBnN-Z_7qeat5Skj6uhk4pP88";
 
 const firebaseConfig = {
   apiKey: API_KEY,
-  authDomain: "eladwya-92754604-eb321.firebaseapp.com",
-  projectId: "eladwya-92754604-eb321",
-  storageBucket: "eladwya-92754604-eb321.firebasestorage.app",
-  messagingSenderId: "319834803886",
-  appId: "1:319834803886:web:6a71f628e1a20d01c5a73f"
+  authDomain: "sahaty-app-68685.firebaseapp.com",
+  projectId: "sahaty-app-68685",
+  storageBucket: "sahaty-app-68685.firebasestorage.app",
+  messagingSenderId: "608914168606",
+  appId: "1:608914168606:android:c69b905f228a0e5c67070f",
+  databaseURL: "https://sahaty-app-68685-default-rtdb.firebaseio.com"
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-
-// Enable offline persistence
-try {
-  enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code == 'failed-precondition') {
-      console.warn('Multiple tabs open, persistence can only be enabled in one tab at a a time.');
-    } else if (err.code == 'unimplemented') {
-      console.warn('The current browser does not support all of the features required to enable persistence');
-    }
-  });
-} catch (e) {
-  console.warn("Failed to enable persistence:", e);
-}
-
-// Initialize messaging safely
-let messaging: any = null;
-try {
-  messaging = getMessaging(app);
-} catch (e) {
-  console.warn("Firebase Messaging failed to initialize. Notifications might not work.", e);
-}
+const db = getDatabase(app);
 
 export const requestForToken = async () => {
-  if (!messaging) return null;
-  try {
-    // Try to reuse the existing service worker registration (sw.js)
-    let registration;
-    if ('serviceWorker' in navigator) {
-      registration = await navigator.serviceWorker.getRegistration();
-    }
-
-    const currentToken = await getToken(messaging, { 
-      vapidKey: 'BN5rkFKkzuPxT7mGCq0hkUnEyODvdxuT6TI5ML33etf_SwaExFlyS5_sHNuIf0iEC-Z5B63QjPuTUusMQfjMykA',
-      serviceWorkerRegistration: registration
-    });
-    if (currentToken) {
-      console.log('current token for client: ', currentToken);
-      return currentToken;
-    } else {
-      console.log('No registration token available. Request permission to generate one.');
-      return null;
-    }
-  } catch (err) {
-    console.log('An error occurred while retrieving token. ', err);
-    return null;
-  }
+  return null;
 };
 
 export const onForegroundMessage = (callback: (payload: any) => void) => {
-  if (!messaging) return () => {};
-  return onMessage(messaging, (payload) => {
-    callback(payload);
-  });
+  return () => {};
 };
 
 export const saveTokenToDatabase = async (patientId: string, token: string) => {
-  if (!patientId || !token) return;
-  const docRef = doc(db, "patients", patientId);
+  console.log(`[Firebase] Saved token for ${patientId}: ${token}`);
   try {
-    await setDoc(docRef, { fcmToken: token }, { merge: true });
-  } catch (error) {
-    console.error("Error saving token:", error);
+    const tokenRef = ref(db, `users/${patientId}/fcmToken`);
+    await set(tokenRef, token);
+  } catch (e) {
+    console.error("Error saving token", e);
   }
-};
-
-/**
- * Robustly sanitizes data from Firestore to ensure it's a plain JSON-compatible object.
- * Strictly allows only plain objects, arrays, and primitives.
- */
-const sanitizeData = (data: any, seen = new WeakSet()): any => {
-  if (data === null || data === undefined) return data;
-  if (typeof data !== 'object') return data;
-  
-  // Handle circularity early
-  if (seen.has(data)) return undefined;
-
-  // Handle Firebase Timestamps
-  if (typeof data.toDate === 'function') {
-    return data.toDate().getTime();
-  }
-
-  // Handle Arrays
-  if (Array.isArray(data)) {
-    seen.add(data);
-    return data.map(item => sanitizeData(item, seen));
-  }
-
-  // Strict check for plain objects only
-  const proto = Object.getPrototypeOf(data);
-  if (proto === null || proto === Object.prototype) {
-    seen.add(data);
-    const sanitized: any = {};
-    for (const key in data) {
-      if (Object.prototype.hasOwnProperty.call(data, key)) {
-        sanitized[key] = sanitizeData(data[key], seen);
-      }
-    }
-    return sanitized;
-  }
-
-  // For non-plain objects (Firebase classes, references, etc), prune or convert to string
-  // If it's a DocumentReference, it will have a 'path' property
-  return data.path || String(data);
 };
 
 export const syncPatientData = async (patientId: string, data: AppState) => {
-  if (!patientId || patientId.length < 4) return;
-  
-  const docRef = doc(db, "patients", patientId);
   try {
-    const syncPayload = {
-      patientName: data.patientName,
-      patientAge: data.patientAge,
-      patientGender: data.patientGender || 'male',
-      medications: data.medications || [],
-      takenMedications: data.takenMedications || {},
-      currentReport: data.currentReport,
-      dailyReports: data.dailyReports || {},
-      medicalHistorySummary: data.medicalHistorySummary,
-      dietGuidelines: data.dietGuidelines,
-      upcomingProcedures: data.upcomingProcedures || "",
-      labTests: data.labTests || [],
-      timeSlotSettings: data.timeSlotSettings || {},
-      lastDailyTipDate: data.lastDailyTipDate || null,
-      dailyTipContent: data.dailyTipContent || "",
-      lastUpdated: serverTimestamp()
-    };
+    const userRef = ref(db, `users/${patientId}/data`);
+    // Filter out potentially large or circular data if necessary, 
+    // but AppState should be JSON serializable.
+    // We avoid syncing 'local' state like UI toggles if they are in AppState,
+    // but assuming AppState is the persisted state.
     
-    await setDoc(docRef, syncPayload, { merge: true });
-  } catch (error: any) {
-    if (error.code === 'resource-exhausted') {
-      console.error("Firestore Quota Exceeded.");
-    } else {
-      console.error("Firestore Sync Error:", error);
-    }
+    // Create a clean object to sync (removing any undefined/functions)
+    const cleanData = JSON.parse(JSON.stringify(data));
+    cleanData.lastUpdated = serverTimestamp();
+    
+    await set(userRef, cleanData);
+    console.log(`[Firebase] Synced data for ${patientId}`);
+  } catch (e) {
+    console.error("Firebase sync failed", e);
   }
 };
 
 export const sendRemoteReminder = async (patientId: string, medName: string) => {
-  if (!patientId) return;
-  const docRef = doc(db, "patients", patientId);
+  console.log(`[Firebase] Sending reminder to ${patientId} for ${medName}`);
   try {
-    await setDoc(docRef, {
-      remoteReminder: {
-        timestamp: Date.now(),
-        medName: medName
-      }
-    }, { merge: true });
-  } catch (error) {
-    console.error("Remote Reminder Error:", error);
+    const remindersRef = ref(db, `users/${patientId}/reminders`);
+    const newReminderRef = push(remindersRef);
+    await set(newReminderRef, {
+      medicationName: medName,
+      timestamp: serverTimestamp(),
+      type: 'manual_reminder',
+      sender: 'caregiver'
+    });
+  } catch (e) {
+    console.error("Failed to send remote reminder", e);
   }
 };
 
 export const listenToPatient = (patientId: string, onUpdate: (data: Partial<AppState>) => void) => {
-  if (!patientId || patientId.length < 4) return () => {};
+  const userRef = ref(db, `users/${patientId}/data`);
   
-  const docRef = doc(db, "patients", patientId);
-  
-  return onSnapshot(docRef, (docSnap) => {
-    if (docSnap.exists()) {
-      const rawData = docSnap.data();
-      // Use the improved recursive sanitizer to strip out complex Firestore internals
-      const cleanData = sanitizeData(rawData);
-      onUpdate(cleanData as Partial<AppState>);
+  const unsubscribe = onValue(userRef, (snapshot) => {
+    const val = snapshot.val();
+    if (val) {
+      console.log(`[Firebase] Received update for ${patientId}`);
+      onUpdate(val);
     }
   }, (error) => {
-    if (error.code === 'resource-exhausted') {
-      console.warn("Firestore Quota exceeded.");
-    } else {
-      console.warn("Firestore Listener error:", error.message);
-    }
+    console.error("Firebase listen error", error);
   });
+
+  return unsubscribe;
 };
 
 export const generateSyncId = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
 
-export const backupAdherenceHistory = async (patientId: string, dailyReports: AppState["dailyReports"]) => {
-  if (!patientId || !dailyReports) return;
-  const backupId = `adherence_${Date.now()}`;
-  const backupRef = doc(db, "patients", patientId, "backups", backupId);
+export const backupAdherenceHistory = async (patientId: string, data: any) => {
+  console.log(`[Backup] Backing up data for ${patientId}`);
+  
   try {
-    await setDoc(backupRef, {
-      type: "adherenceHistory",
-      createdAt: serverTimestamp(),
-      dailyReports
-    });
-  } catch (error) {
-    console.error("Adherence backup error:", error);
+      if ((window as any).Capacitor && (window as any).Capacitor.isNative) {
+          const fileName = `backup_${patientId}_${new Date().toISOString().split('T')[0]}.json`;
+          
+          // Write to Cache directory (temp storage for sharing)
+          const result = await Filesystem.writeFile({
+              path: fileName,
+              data: JSON.stringify(data, null, 2),
+              directory: Directory.Cache,
+              encoding: Encoding.UTF8
+          });
+          
+          // Share the file
+          await Share.share({
+              title: 'نسخة احتياطية - صحتي',
+              text: 'ملف النسخة الاحتياطية لتطبيق صحتي',
+              url: result.uri,
+              dialogTitle: 'حفظ النسخة الاحتياطية'
+          });
+      } else {
+          // Web fallback: Download file
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `backup_${patientId}_${new Date().toISOString().split('T')[0]}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+      }
+      
+      // Also save to localStorage as fallback/cache
+      localStorage.setItem(`backup_${patientId}`, JSON.stringify(data));
+      
+  } catch (e) {
+      console.error("Backup failed", e);
+      throw e;
   }
 };

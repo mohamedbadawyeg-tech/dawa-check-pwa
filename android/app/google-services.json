@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "608914168606",
+    "project_id": "sahaty-app-68685",
+    "storage_bucket": "sahaty-app-68685.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:608914168606:android:c69b905f228a0e5c67070f",
+        "android_client_info": {
+          "package_name": "com.sahaty.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "608914168606-p2i3m0cfo3so6mr95ej633a2uksefp7b.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sahaty.app",
+            "certificate_hash": "0fdf0e2436ac0fd1663218c71331fab3f628f0a1"
+          }
+        },
+        {
+          "client_id": "608914168606-cr9293qscukk9ngu4fkllcl2nbug8usf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA19OCKhLfBnN-Z_7qeat5Skj6uhk4pP88"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "608914168606-cr9293qscukk9ngu4fkllcl2nbug8usf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

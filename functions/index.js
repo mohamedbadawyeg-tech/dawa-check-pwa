@@ -50,10 +50,23 @@ async function checkAndSendMedications() {
     if (dueMeds.length > 0) {
       const medNames = dueMeds.map(m => m.name).join(' و ');
       
+      let friendlyPrefix = '';
+      const name = data.patientName || '';
+      const age = parseInt(data.patientAge);
+      const gender = data.patientGender;
+
+      if (age > 0) {
+    if (age < 40) friendlyPrefix = gender === 'female' ? `يا آنسة ${name}` : `يا بطل ${name}`;
+    else if (age < 60) friendlyPrefix = gender === 'female' ? `يا أستاذة ${name}` : `يا أستاذ ${name}`;
+        else friendlyPrefix = gender === 'female' ? `يا حاجة ${name}` : `يا حاج ${name}`;
+      } else {
+        friendlyPrefix = `يا ${name}`;
+      }
+
       const message = {
         notification: {
           title: 'تذكير بموعد الدواء 💊',
-          body: `يا حاج ${data.patientName || ''}، حان موعد تناول: ${medNames}`,
+          body: `${friendlyPrefix}، حان موعد تناول: ${medNames}`,
         },
         data: {
           type: 'medication_reminder',
