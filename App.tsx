@@ -1923,10 +1923,51 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const toggleVoiceListening = () => {
+  const toggleVoiceListening = async () => {
     if (!state.aiSubscriptionActive) {
          setIsSubscriptionModalOpen(true);
          return;
+    }
+
+    // Native Implementation
+    if (Capacitor.isNativePlatform()) {
+        try {
+            if (isVoiceListening) {
+                await SpeechRecognition.stop();
+                setIsVoiceListening(false);
+            } else {
+                // Check permissions
+                const status = await SpeechRecognition.checkPermissions();
+                if (status.speechRecognition !== 'granted') {
+                   const permission = await SpeechRecognition.requestPermissions();
+                   if (permission.speechRecognition !== 'granted') {
+                      alert('يرجى السماح بصلاحية الميكروفون لاستخدام الأوامر الصوتية');
+                      return;
+                   }
+                }
+
+                setIsVoiceListening(true);
+                // User requested message
+                const { matches } = await SpeechRecognition.start({
+                  language: 'ar-EG',
+                  maxResults: 1,
+                  prompt: 'تحدث لتسجيل الادوية او الاعراض',
+                  popup: true,
+                  partialResults: false
+                });
+
+                if (matches && matches.length > 0) {
+                   if (handleVoiceCommandRef.current) {
+                        handleVoiceCommandRef.current(matches[0]);
+                   }
+                }
+                setIsVoiceListening(false);
+            }
+        } catch (e) {
+            console.error("Native Speech Error:", e);
+            setIsVoiceListening(false);
+        }
+        return;
     }
     
     if (!voiceRecognition) {
@@ -4705,7 +4746,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <DraggableLateAlert lateMeds={lateMeds} onMarkAsTaken={toggleMedication} />
+
     </div>
   );
 };
