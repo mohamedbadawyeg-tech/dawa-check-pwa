@@ -40,14 +40,18 @@ jobs:
             clean build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath build
 
-      - name: Zip iOS Project
+      - name: Package Unsigned IPA
         run: |
-          zip -r ios-project.zip ios/
+          cd ios/App
+          mkdir Payload
+          cp -r build/Build/Products/Debug-iphoneos/App.app Payload/
+          zip -r App.ipa Payload
 
-      - name: Upload iOS Project Artifacts
+      - name: Upload iOS App Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-project-source
-          path: ios-project.zip
+          name: ios-app-unsigned
+          path: ios/App/App.ipa
