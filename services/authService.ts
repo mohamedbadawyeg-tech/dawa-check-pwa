@@ -1,7 +1,7 @@
 
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { SignInWithApple, AppleSignInResponse, AppleSignInErrorResponse } from '@capacitor-community/apple-sign-in';
-import { getAuth, signInWithCredential, GoogleAuthProvider, signOut as firebaseSignOut } from 'firebase/auth';
+import { getAuth, signInWithCredential, GoogleAuthProvider, signOut as firebaseSignOut, signInAnonymously } from 'firebase/auth';
 import { app } from './firebaseService';
 
 export interface User {
@@ -81,6 +81,25 @@ export const signInWithApple = async (): Promise<User> => {
         });
       }, 1000);
     });
+  }
+};
+
+export const signInAnonymouslyUser = async (): Promise<User> => {
+  try {
+    const auth = getAuth(app);
+    const result = await signInAnonymously(auth);
+    const user = result.user;
+    
+    return {
+      uid: user.uid,
+      email: null,
+      displayName: 'Guest',
+      photoURL: null,
+      providerId: 'anonymous'
+    };
+  } catch (e) {
+    console.error("Anonymous Sign In Failed", e);
+    throw e;
   }
 };
 

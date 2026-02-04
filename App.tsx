@@ -22,7 +22,7 @@ import PrivacyPolicy from './components/PrivacyPolicy';
 import { Tour } from './components/Tour';
 import { syncPatientData, listenToPatient, generateSyncId, sendRemoteReminder, requestForToken, onForegroundMessage, saveTokenToDatabase, backupAdherenceHistory, getOrGenerateShortCode } from './services/firebaseService';
 import { openWhatsApp } from './utils/whatsapp';
-import { signInWithGoogle, signInWithApple, signOut, initializeAuth, User } from './services/authService';
+import { signInWithGoogle, signInWithApple, signOut, initializeAuth, User, signInAnonymouslyUser } from './services/authService';
 import { 
   Heart, 
   Activity, 
@@ -2505,6 +2505,13 @@ const App: React.FC = () => {
       }
 
       if (action === 'GUEST_LOGIN' || value === 'GUEST_LOGIN') {
+          // Authenticate anonymously to enable Firebase features
+          signInAnonymouslyUser().then(newUser => {
+              setUser(newUser);
+              localStorage.setItem('auth_user', JSON.stringify(newUser));
+              updateState({ patientId: newUser.uid }); // Sync patientId with Auth UID
+          }).catch(err => console.error("Guest login failed", err));
+
           setTimeout(() => addBotMessage("أهلاً بك! ما هو اسمك؟", 'form', undefined, 'name'), 500);
           return;
       }
