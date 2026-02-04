@@ -4519,27 +4519,7 @@ const App: React.FC = () => {
             <div className="fixed inset-0 z-[125] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md animate-in slide-in-from-bottom-10 duration-300">
               <div className="bg-white dark:bg-slate-900 w-full max-md rounded-[3rem] p-8 shadow-2xl relative border-b-[12px] border-blue-600 transition-colors">
                 <button onClick={() => setIsCalendarOpen(false)} className="absolute top-8 left-8 p-3.5 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-2xl"><X className="w-7 h-7"/></button>
-                <div className="flex items-center justify-between pt-8 mb-6">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCalendarDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs active:scale-95"
-                    >
-                      الشهر السابق
-                    </button>
-                    <button
-                      onClick={() => setCalendarDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs active:scale-95"
-                    >
-                      الشهر التالي
-                    </button>
-                    <button
-                      onClick={() => setCalendarDate(new Date())}
-                      className="px-3 py-2 rounded-xl bg-blue-600 text-white font-black text-xs active:scale-95"
-                    >
-                      اليوم
-                    </button>
-                  </div>
+                <div className="flex items-center justify-between pt-8 mb-6" dir="rtl">
                   <div className="text-right">
                     <h2 className="text-2xl font-black text-slate-900 dark:text-white">
                       تاريخ الالتزام الدوائي
@@ -4547,6 +4527,26 @@ const App: React.FC = () => {
                     <p className="text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase">
                       {new Intl.DateTimeFormat('ar-EG', { year: 'numeric', month: 'long' }).format(calendarDate)}
                     </p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-20">
+                    <button
+                      onClick={() => setCalendarDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs active:scale-95"
+                    >
+                      السابق
+                    </button>
+                    <button
+                      onClick={() => setCalendarDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs active:scale-95"
+                    >
+                      التالي
+                    </button>
+                    <button
+                      onClick={() => setCalendarDate(new Date())}
+                      className="px-3 py-2 rounded-xl bg-blue-600 text-white font-black text-xs active:scale-95"
+                    >
+                      اليوم
+                    </button>
                   </div>
                 </div>
                 <div className="grid grid-cols-7 gap-5 text-center mb-10" dir="rtl">

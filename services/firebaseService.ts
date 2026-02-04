@@ -6,10 +6,8 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore, doc, setDoc, onSnapshot, getDoc, serverTimestamp } from "firebase/firestore";
 
-// Split key to avoid GitHub secret scanning false positive
-const PART_1 = "AIzaSyA6UOYiq7PcG";
-const PART_2 = "MMo4fxc1-CsEUveA7qb4Xw";
-export const API_KEY = `${PART_1}${PART_2}`;
+// Use environment variable for API Key
+export const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
 
 export const firebaseConfig = {
   apiKey: API_KEY,
@@ -222,8 +220,11 @@ export const resolvePatientId = async (inputCode: string): Promise<string> => {
           if (snapshot.exists()) {
               return snapshot.data().uid;
           }
-      } catch (e) {
+      } catch (e: any) {
           console.error("Error resolving short code", e);
+          if (e.code === 'permission-denied') {
+             throw new Error("PERMISSION_DENIED");
+          }
       }
   }
   // Default: assume it is a full UID

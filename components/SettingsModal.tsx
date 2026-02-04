@@ -162,8 +162,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       } else {
                          alert("الرمز قصير جداً ⚠️");
                       }
-                    } catch (e) {
-                      alert("حدث خطأ أثناء التحقق ❌");
+                    } catch (e: any) {
+                      if (e.message === "PERMISSION_DENIED") {
+                          alert("فشل التحقق بسبب صلاحيات الأمان 🔒\nيرجى تحديث Firestore Rules للسماح بقراءة مجموعة 'shortCodes'.");
+                      } else {
+                          alert("حدث خطأ أثناء التحقق ❌");
+                      }
                     } finally {
                       setIsVerifying(false);
                     }
@@ -504,7 +508,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button onClick={onClose} className={`w-full py-6 text-white rounded-[2rem] font-black text-xl shadow-2xl active:scale-[0.98] transition-all mt-4 ${state.caregiverMode ? 'bg-emerald-600' : 'bg-slate-900 dark:bg-slate-800'}`}>العودة للرئيسية</button>
         </div>
       </div>
-      <ScrollHint />
+      <ScrollHint position="fixed" />
     </div>
   );
 };
