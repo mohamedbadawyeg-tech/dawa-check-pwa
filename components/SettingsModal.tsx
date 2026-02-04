@@ -136,10 +136,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <input 
                   type="text" 
                   placeholder="أدخل رمز المريض" 
-                  value={state.caregiverTargetId || ''} 
+                  value={state.caregiverInputCode || state.caregiverTargetId || ''} 
                   onChange={(e) => {
                     const val = e.target.value.toUpperCase();
-                    updateState({ caregiverTargetId: val });
+                    updateState({ caregiverTargetId: val, caregiverInputCode: undefined });
                   }} 
                   className="w-full p-6 pl-24 bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-100 dark:border-emerald-900/30 focus:border-emerald-500 rounded-[1.8rem] font-black text-3xl text-center uppercase shadow-md dark:text-white" 
                 />
@@ -152,7 +152,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       if (val.length === 6) {
                         const resolved = await resolvePatientId(val);
                         if (resolved !== val) {
-                          updateState({ caregiverTargetId: resolved });
+                          updateState({ caregiverTargetId: resolved, caregiverInputCode: val });
                           alert("تم العثور على المريض وربط الحساب بنجاح ✅");
                         } else {
                           alert("لم يتم العثور على مريض بهذا الرمز ❌\nتأكد من صحة الرمز.");

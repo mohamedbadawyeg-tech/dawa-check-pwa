@@ -3526,7 +3526,7 @@ const App: React.FC = () => {
 
 
 
-              <div id="medication-schedule" className="space-y-12 pb-8">
+              <div id="medication-schedule" className="space-y-12 pb-40">
                 {(Object.keys(TIME_SLOT_CONFIG) as TimeSlot[]).map(slot => {
                   const meds = activeMedications.filter(m => m.timeSlot === slot);
                   if (meds.length === 0) return null;
