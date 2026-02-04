@@ -1,4 +1,4 @@
-package com.sahaty.app;
+package com.sahaty.app.v2;
 
 import com.getcapacitor.BridgeActivity;
 

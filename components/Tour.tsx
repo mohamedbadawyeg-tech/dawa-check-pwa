@@ -69,16 +69,16 @@ export const Tour: React.FC<TourProps> = ({ steps, isOpen, onClose, onComplete }
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] overflow-hidden" dir="rtl">
+    <div className="fixed inset-0 z-[2000] overflow-hidden" dir="rtl">
       {/* Semi-transparent overlay with "hole" using massive box-shadow */}
       <div 
-        className="absolute transition-all duration-500 ease-in-out border-2 border-emerald-500 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.8)] pointer-events-none"
+        className="absolute transition-all duration-500 ease-in-out border-4 border-emerald-500 rounded-[2rem] shadow-[0_0_0_9999px_rgba(0,0,0,0.8)] pointer-events-none"
         style={{
-          top: position.top - 12,
-          left: position.left - 8,
-          width: position.width + 16,
-          height: position.height + 16,
-        }}
+            top: position.top - 15,
+            left: position.left - 15,
+            width: position.width + 30,
+            height: position.height + 30,
+          }}
       />
 
       {/* Tooltip */}

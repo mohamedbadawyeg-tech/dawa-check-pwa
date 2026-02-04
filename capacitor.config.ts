@@ -1,15 +1,15 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.sahaty.app',
-  appName: 'صحتي',
+  appId: 'com.sahaty.app.v2',
+  appName: 'صحتي ارابيا',
   webDir: 'dist',
   server: {
     androidScheme: 'https'
   },
   plugins: {
     LocalNotifications: {
-      smallIcon: "ic_notification",
+      smallIcon: "ic_stat_icon",
       iconColor: "#488AFF",
       sound: "beep.wav",
     },
@@ -18,7 +18,7 @@ const config: CapacitorConfig = {
     },
     GoogleAuth: {
       scopes: ['profile', 'email'],
-      serverClientId: '608914168606-cr9293qscukk9ngu4fkllcl2nbug8usf.apps.googleusercontent.com',
+      serverClientId: '987933662797-q2kt60suqdjauuv6c38icp8st88336qh.apps.googleusercontent.com',
       forceCodeForRefreshToken: true,
     },
   }

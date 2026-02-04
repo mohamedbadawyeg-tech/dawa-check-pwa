@@ -1,11 +1,20 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AppState, AIAnalysisResult, TimeSlot, Medication } from "../types";
 import { SLOT_HOURS } from "../constants";
-import { API_KEY } from "./firebaseService";
+
+const getApiKey = () => {
+  const key = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!key || key === 'PLACEHOLDER_API_KEY') {
+    console.warn("Gemini API Key is missing or invalid");
+    return "";
+  }
+  return key;
+};
 
 export const generateDailyHealthTip = async (state: AppState): Promise<string> => {
-  const key = import.meta.env.VITE_GEMINI_API_KEY || API_KEY;
+  const key = getApiKey();
+  if (!key) return "تذكر شرب الماء بانتظام للحفاظ على صحة كليتيك.";
+  
   const ai = new GoogleGenAI({ apiKey: key });
 
   const report = state.currentReport;
@@ -80,7 +89,7 @@ export const generateDailyHealthTip = async (state: AppState): Promise<string> =
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+        model: "gemini-flash-latest",
       contents: prompt,
       config: { temperature: 0.7 }
     });
@@ -90,10 +99,111 @@ export const generateDailyHealthTip = async (state: AppState): Promise<string> =
   }
 };
 
+export const getDrugInfo = async (drugName: string): Promise<string> => {
+  const key = getApiKey();
+  if (!key) return "عذراً، خدمة المعلومات الدوائية غير متاحة حالياً.";
+
+  const ai = new GoogleGenAI({ apiKey: key });
+
+  const prompt = `
+    أنت صيدلي خبير. قدم معلومات مختصرة ومفيدة جداً عن دواء "${drugName}" للمريض.
+    المعلومات المطلوبة:
+    1. استخداماته الرئيسية (بشكل مبسط).
+    2. أشهر الآثار الجانبية.
+    3. تحذيرات هامة (مثل التداخل مع أدوية أخرى أو أطعمة).
+    
+    اكتب باللهجة المصرية البسيطة والمطمئنة.
+    لا تتجاوز 4-5 أسطر.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: prompt,
+      config: { temperature: 0.5 }
+    });
+    return response.text.trim();
+  } catch (e) {
+    console.error("Error getting drug info:", e);
+    return "عذراً، لم أتمكن من العثور على معلومات عن هذا الدواء حالياً.";
+  }
+};
+
+export const coordinateMedications = async (rawInput: string): Promise<Medication[]> => {
+  const key = getApiKey();
+  if (!key) throw new Error("Gemini API Key is missing");
+
+  const ai = new GoogleGenAI({ apiKey: key });
+
+  const prompt = `
+    أنت صيدلي خبير في تنسيق جداول الأدوية.
+    المستخدم سيدخل قائمة بالأدوية وجرعاتها (وربما الأوقات أو بدونها).
+    
+    مهمتك:
+    1. استخراج أسماء الأدوية والجرعات بدقة.
+    2. تحديد "أفضل وقت طبي" لتناول كل دواء (Time Slot) بناءً على:
+       - نوع الدواء (مثلاً: أدوية الغدة على الريق، أدوية الكوليسترول مساءً، مدرات البول صباحاً).
+       - تجنب التداخلات الدوائية المعروفة (الفصل بين الأدوية التي تتعارض).
+       - راحة المريض (توزيع الأدوية بشكل منطقي).
+    3. اقتراح وقت محدد (Notification Time) بصيغة HH:MM.
+    
+    النص المدخل:
+    "${rawInput}"
+
+    المخرجات المطلوبة (JSON فقط):
+    أعد مصفوفة من الكائنات (Array of Objects) تحتوي على:
+    - name: اسم الدواء.
+    - dosage: الجرعة.
+    - timeSlot: (morning-fasting, after-breakfast, before-lunch, after-lunch, afternoon, 6pm, after-dinner, before-bed).
+    - frequencyLabel: وصف التكرار بالعربية (مثال: مرة يومياً بعد العشاء).
+    - notes: سبب اختيار التوقيت أو تحذير هام (بالعربية).
+    - category: (pressure, diabetes, blood-thinner, antibiotic, stomach, other).
+    - isCritical: (true/false).
+    - notificationTime: الوقت المقترح بصيغة "HH:MM" (نظام 24 ساعة).
+
+    تأكد أن الصيغة JSON صحيحة تماماً.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: prompt,
+      config: {
+      responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              dosage: { type: Type.STRING },
+              timeSlot: { type: Type.STRING, enum: ["morning-fasting", "after-breakfast", "before-lunch", "after-lunch", "afternoon", "6pm", "after-dinner", "before-bed"] },
+              frequencyLabel: { type: Type.STRING },
+              notes: { type: Type.STRING },
+              category: { type: Type.STRING, enum: ["pressure", "diabetes", "blood-thinner", "antibiotic", "stomach", "other"] },
+              isCritical: { type: Type.BOOLEAN },
+              notificationTime: { type: Type.STRING }
+            },
+            required: ["name", "dosage", "timeSlot", "frequencyLabel", "category", "isCritical", "notificationTime"]
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("Empty response");
+    return JSON.parse(text) as Medication[];
+  } catch (e) {
+    console.error("Coordination failed:", e);
+    throw e;
+  }
+};
+
+
 export const analyzeHealthStatus = async (state: AppState): Promise<AIAnalysisResult> => {
-  const key = (process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY') 
-    ? process.env.API_KEY 
-    : API_KEY;
+  const key = getApiKey();
+  if (!key) throw new Error("Gemini API Key is missing");
+
   const ai = new GoogleGenAI({ apiKey: key });
   const report = state.currentReport;
 
@@ -164,10 +274,10 @@ export const analyzeHealthStatus = async (state: AppState): Promise<AIAnalysisRe
   `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-1.5-flash",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
+      model: "gemini-flash-latest",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -196,9 +306,9 @@ export const analyzeHealthStatus = async (state: AppState): Promise<AIAnalysisRe
 };
 
 export const generateDietPlan = async (state: AppState): Promise<string> => {
-  const key = (process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY') 
-    ? process.env.API_KEY 
-    : API_KEY;
+  const key = getApiKey();
+  if (!key) return "يرجى استشارة الطبيب لتحديد النظام الغذائي المناسب.";
+
   const ai = new GoogleGenAI({ apiKey: key });
 
   const diagnosisText = state.diagnoses && state.diagnoses.length > 0
@@ -220,21 +330,21 @@ export const generateDietPlan = async (state: AppState): Promise<string> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-flash-latest",
       contents: prompt,
       config: { temperature: 0.7 }
     });
     return response.text.trim() || "يرجى استشارة الطبيب لتحديد النظام الغذائي المناسب.";
-  } catch (e) {
+  } catch (e: any) {
     console.error("Diet generation failed", e);
-    return "لا يمكن توليد النظام الغذائي حالياً.";
+    return `لا يمكن توليد النظام الغذائي حالياً. (${e.message || 'خطأ غير معروف'})`;
   }
 };
 
 export const generateMedicationPlanFromText = async (rawInput: string): Promise<Medication[]> => {
-  const key = (process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY') 
-    ? process.env.API_KEY 
-    : API_KEY;
+  const key = getApiKey();
+  if (!key) throw new Error("Gemini API Key is missing");
+
   const ai = new GoogleGenAI({ apiKey: key });
 
   const prompt = `
@@ -260,12 +370,12 @@ export const generateMedicationPlanFromText = async (rawInput: string): Promise<
   `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-1.5-flash",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
+      model: "gemini-flash-latest",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
         items: {
           type: Type.OBJECT,
           properties: {
@@ -289,9 +399,9 @@ export const generateMedicationPlanFromText = async (rawInput: string): Promise<
 };
 
 export const generateMedicationPlanFromImage = async (base64Image: string): Promise<Medication[]> => {
-  const key = (process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY') 
-    ? process.env.API_KEY 
-    : API_KEY;
+  const key = getApiKey();
+  if (!key) throw new Error("Gemini API Key is missing");
+
   const ai = new GoogleGenAI({ apiKey: key });
 
   const prompt = `
@@ -314,8 +424,8 @@ export const generateMedicationPlanFromImage = async (base64Image: string): Prom
   `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-1.5-flash",
-    contents: [
+      model: "gemini-flash-latest",
+      contents: [
       { text: prompt },
       { inlineData: { mimeType: "image/jpeg", data: base64Image } }
     ],
@@ -348,9 +458,8 @@ export const generateMedicationPlanFromImage = async (base64Image: string): Prom
 export const checkDrugInteractions = async (newMedName: string, currentMeds: Medication[]): Promise<{ hasInteraction: boolean; warning?: string }> => {
   if (!currentMeds || currentMeds.length === 0) return { hasInteraction: false };
   
-  const key = (process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY') 
-    ? process.env.API_KEY 
-    : API_KEY;
+  const key = getApiKey();
+  if (!key) return { hasInteraction: false };
   const ai = new GoogleGenAI({ apiKey: key });
 
   const medList = currentMeds.map(m => m.name).join(', ');
@@ -374,7 +483,7 @@ export const checkDrugInteractions = async (newMedName: string, currentMeds: Med
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-flash-latest",
       contents: prompt,
       config: {
         responseMimeType: "application/json",

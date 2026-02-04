@@ -1,6 +1,8 @@
 
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { SignInWithApple, AppleSignInResponse, AppleSignInErrorResponse } from '@capacitor-community/apple-sign-in';
+import { getAuth, signInWithCredential, GoogleAuthProvider, signOut as firebaseSignOut } from 'firebase/auth';
+import { app } from './firebaseService';
 
 export interface User {
   uid: string;
@@ -13,7 +15,7 @@ export interface User {
 export const initializeAuth = () => {
     // Initialize for both Web and Native to ensure configuration is loaded
     GoogleAuth.initialize({
-        clientId: '608914168606-cr9293qscukk9ngu4fkllcl2nbug8usf.apps.googleusercontent.com',
+        clientId: '987933662797-q2kt60suqdjauuv6c38icp8st88336qh.apps.googleusercontent.com',
         scopes: ['profile', 'email'],
         grantOfflineAccess: true,
     });
@@ -21,12 +23,18 @@ export const initializeAuth = () => {
 
 export const signInWithGoogle = async (): Promise<User> => {
   try {
-      const user = await GoogleAuth.signIn();
+      const googleUser = await GoogleAuth.signIn();
+      const idToken = googleUser.authentication.idToken;
+      const credential = GoogleAuthProvider.credential(idToken);
+      const auth = getAuth(app);
+      const result = await signInWithCredential(auth, credential);
+      const user = result.user;
+
       return {
-          uid: user.id,
+          uid: user.uid,
           email: user.email,
-          displayName: user.displayName || user.givenName || 'User',
-          photoURL: user.imageUrl,
+          displayName: user.displayName || googleUser.givenName || 'User',
+          photoURL: user.photoURL || googleUser.imageUrl,
           providerId: 'google.com'
       };
   } catch (e) {
@@ -39,7 +47,7 @@ export const signInWithGoogle = async (): Promise<User> => {
 export const signInWithApple = async (): Promise<User> => {
   try {
     const options = {
-      clientId: 'com.sahaty.app.login', // ⚠️ TODO: Create this Service ID in Apple Developer Console
+      clientId: 'com.sahaty.app.v2.login', // ⚠️ TODO: Create this Service ID in Apple Developer Console
       redirectURI: 'https://sahaty-app-68685.firebaseapp.com/__/auth/handler',
       scopes: 'name email',
       state: '12345',
@@ -79,6 +87,8 @@ export const signInWithApple = async (): Promise<User> => {
 export const signOut = async (): Promise<void> => {
   try {
     await GoogleAuth.signOut();
+    const auth = getAuth(app);
+    await firebaseSignOut(auth);
   } catch (e) {
     console.log("Google SignOut failed (maybe not logged in)", e);
   }

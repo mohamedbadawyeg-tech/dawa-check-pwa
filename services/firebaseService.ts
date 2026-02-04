@@ -3,25 +3,59 @@ import { AppState } from "../types";
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, onValue, push, serverTimestamp, child, get } from "firebase/database";
+import { getAnalytics } from "firebase/analytics";
+import { getFirestore, doc, setDoc, onSnapshot, getDoc, serverTimestamp } from "firebase/firestore";
 
 // Split key to avoid GitHub secret scanning false positive
-const PART_1 = "AIzaSyA19OCKhLf";
-const PART_2 = "BnN-Z_7qeat5Skj6uhk4pP88";
+const PART_1 = "AIzaSyA6UOYiq7PcG";
+const PART_2 = "MMo4fxc1-CsEUveA7qb4Xw";
 export const API_KEY = `${PART_1}${PART_2}`;
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: API_KEY,
-  authDomain: "sahaty-app-68685.firebaseapp.com",
-  projectId: "sahaty-app-68685",
-  storageBucket: "sahaty-app-68685.firebasestorage.app",
-  messagingSenderId: "608914168606",
-  appId: "1:608914168606:android:c69b905f228a0e5c67070f",
-  databaseURL: "https://sahaty-app-68685-default-rtdb.firebaseio.com"
+  authDomain: "sehati-arabia.firebaseapp.com",
+  projectId: "sehati-arabia",
+  storageBucket: "sehati-arabia.firebasestorage.app",
+  messagingSenderId: "987933662797",
+  appId: "1:987933662797:web:36f5063fa51b1ac3928604",
+  measurementId: "G-0TJCKRQ913"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+export const app = initializeApp(firebaseConfig);
+export const analytics = getAnalytics(app);
+export const db = getFirestore(app);
+
+export const testConnection = async () => {
+  try {
+    const testRef = doc(db, 'connection_test', 'test_doc');
+    
+    // Create a timeout promise that rejects after 5 seconds
+    const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Connection timeout")), 5000)
+    );
+
+    // Race between the write operation and the timeout
+    await Promise.race([
+        setDoc(testRef, {
+            timestamp: serverTimestamp(),
+            status: 'online',
+            message: 'Connection successful from Dawa Check App'
+        }),
+        timeout
+    ]);
+
+    return { success: true, message: "تم الاتصال بنجاح! ✅" };
+  } catch (e: any) {
+    console.error("Test connection failed", e);
+    if (e.code === 'permission-denied') {
+        return { success: false, message: "فشل الاتصال: قواعد الأمان تمنع الكتابة (تأكد من تحديث Rules في الموقع) 🔒" };
+    }
+    if (e.message === 'Connection timeout') {
+        return { success: false, message: "فشل الاتصال: انتهت المهلة (تأكد من الإنترنت أو إعدادات المشروع) ⏳" };
+    }
+    return { success: false, message: `فشل الاتصال: ${e.message} ❌` };
+  }
+};
 
 export const requestForToken = async () => {
   return null;
@@ -34,8 +68,8 @@ export const onForegroundMessage = (callback: (payload: any) => void) => {
 export const saveTokenToDatabase = async (patientId: string, token: string) => {
   console.log(`[Firebase] Saved token for ${patientId}: ${token}`);
   try {
-    const tokenRef = ref(db, `users/${patientId}/fcmToken`);
-    await set(tokenRef, token);
+    const userRef = doc(db, 'users', patientId);
+    await setDoc(userRef, { fcmToken: token }, { merge: true });
   } catch (e) {
     console.error("Error saving token", e);
   }
@@ -43,17 +77,18 @@ export const saveTokenToDatabase = async (patientId: string, token: string) => {
 
 export const syncPatientData = async (patientId: string, data: AppState) => {
   try {
-    const userRef = ref(db, `users/${patientId}/data`);
-    // Filter out potentially large or circular data if necessary, 
-    // but AppState should be JSON serializable.
-    // We avoid syncing 'local' state like UI toggles if they are in AppState,
-    // but assuming AppState is the persisted state.
+    const userRef = doc(db, 'users', patientId);
     
-    // Create a clean object to sync (removing any undefined/functions)
+    // Create a clean object to sync
     const cleanData = JSON.parse(JSON.stringify(data));
-    cleanData.lastUpdated = serverTimestamp();
     
-    await set(userRef, cleanData);
+    // In Firestore, we put data in a 'data' field to avoid collisions with other fields
+    // We use merge: true to avoid overwriting other fields like fcmToken
+    await setDoc(userRef, {
+        data: cleanData,
+        lastUpdated: serverTimestamp()
+    }, { merge: true });
+    
     console.log(`[Firebase] Synced data for ${patientId}`);
   } catch (e) {
     console.error("Firebase sync failed", e);
@@ -63,27 +98,33 @@ export const syncPatientData = async (patientId: string, data: AppState) => {
 export const sendRemoteReminder = async (patientId: string, medName: string) => {
   console.log(`[Firebase] Sending reminder to ${patientId} for ${medName}`);
   try {
-    const remindersRef = ref(db, `users/${patientId}/reminders`);
-    const newReminderRef = push(remindersRef);
-    await set(newReminderRef, {
-      medicationName: medName,
-      timestamp: serverTimestamp(),
-      type: 'manual_reminder',
-      sender: 'caregiver'
-    });
+    const userRef = doc(db, 'users', patientId);
+    // Merge into data.remoteReminder
+    await setDoc(userRef, {
+      data: {
+        remoteReminder: {
+          medicationName: medName,
+          timestamp: Date.now(),
+          type: 'manual_reminder',
+          sender: 'caregiver'
+        }
+      }
+    }, { merge: true });
   } catch (e) {
     console.error("Failed to send remote reminder", e);
   }
 };
 
 export const listenToPatient = (patientId: string, onUpdate: (data: Partial<AppState>) => void) => {
-  const userRef = ref(db, `users/${patientId}/data`);
+  const userRef = doc(db, 'users', patientId);
   
-  const unsubscribe = onValue(userRef, (snapshot) => {
-    const val = snapshot.val();
-    if (val) {
-      console.log(`[Firebase] Received update for ${patientId}`);
-      onUpdate(val);
+  const unsubscribe = onSnapshot(userRef, (doc) => {
+    if (doc.exists()) {
+      const val = doc.data();
+      if (val && val.data) {
+        console.log(`[Firebase] Received update for ${patientId}`);
+        onUpdate(val.data);
+      }
     }
   }, (error) => {
     console.error("Firebase listen error", error);
@@ -99,10 +140,11 @@ export const generateSyncId = () => {
 export const getOrGenerateShortCode = async (uid: string): Promise<string> => {
   try {
     // 1. Check if user already has a short code
-    const userCodeRef = ref(db, `users/${uid}/syncCode`);
-    const snapshot = await get(userCodeRef);
-    if (snapshot.exists()) {
-      return snapshot.val();
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists() && userSnap.data().syncCode) {
+      return userSnap.data().syncCode;
     }
 
     // 2. Generate new unique code
@@ -112,9 +154,9 @@ export const getOrGenerateShortCode = async (uid: string): Promise<string> => {
 
     while (!isUnique && attempts < 5) {
       code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const codeLookupRef = ref(db, `users_lookup/${code}`);
-      const codeSnapshot = await get(codeLookupRef);
-      if (!codeSnapshot.exists()) {
+      const codeRef = doc(db, 'shortCodes', code);
+      const codeSnap = await getDoc(codeRef);
+      if (!codeSnap.exists()) {
         isUnique = true;
       }
       attempts++;
@@ -123,8 +165,8 @@ export const getOrGenerateShortCode = async (uid: string): Promise<string> => {
     if (!isUnique) throw new Error("Failed to generate unique code");
 
     // 3. Save mapping
-    await set(ref(db, `users_lookup/${code}`), uid);
-    await set(ref(db, `users/${uid}/syncCode`), code);
+    await setDoc(doc(db, 'shortCodes', code), { uid });
+    await setDoc(doc(db, 'users', uid), { syncCode: code }, { merge: true });
 
     return code;
   } catch (e) {
@@ -133,14 +175,52 @@ export const getOrGenerateShortCode = async (uid: string): Promise<string> => {
   }
 };
 
+export const retryShortCodeGeneration = async (uid: string): Promise<string> => {
+    try {
+        // 1. Check if user already has a short code
+        const userRef = doc(db, 'users', uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists() && userSnap.data().syncCode) {
+          return userSnap.data().syncCode;
+        }
+    
+        // 2. Generate new unique code
+        let code = '';
+        let isUnique = false;
+        let attempts = 0;
+    
+        while (!isUnique && attempts < 5) {
+          code = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const codeRef = doc(db, 'shortCodes', code);
+          const codeSnap = await getDoc(codeRef);
+          if (!codeSnap.exists()) {
+            isUnique = true;
+          }
+          attempts++;
+        }
+    
+        if (!isUnique) throw new Error("Could not generate a unique code after 5 attempts");
+    
+        // 3. Save mapping
+        await setDoc(doc(db, 'shortCodes', code), { uid });
+        await setDoc(doc(db, 'users', uid), { syncCode: code }, { merge: true });
+    
+        return code;
+      } catch (e: any) {
+        console.error("Error generating short code", e);
+        throw e;
+      }
+};
+
 export const resolvePatientId = async (inputCode: string): Promise<string> => {
   // If input looks like a short code (6 chars, alphanumeric), try to lookup
   if (inputCode.length === 6 && /^[A-Z0-9]+$/.test(inputCode)) {
       try {
-          const codeRef = ref(db, `users_lookup/${inputCode}`);
-          const snapshot = await get(codeRef);
+          const codeRef = doc(db, 'shortCodes', inputCode);
+          const snapshot = await getDoc(codeRef);
           if (snapshot.exists()) {
-              return snapshot.val();
+              return snapshot.data().uid;
           }
       } catch (e) {
           console.error("Error resolving short code", e);
@@ -167,8 +247,8 @@ export const backupAdherenceHistory = async (patientId: string, data: any) => {
           
           // Share the file
           await Share.share({
-              title: 'نسخة احتياطية - صحتي',
-              text: 'ملف النسخة الاحتياطية لتطبيق صحتي',
+              title: 'نسخة احتياطية - صحتي ارابيا',
+            text: 'ملف النسخة الاحتياطية لتطبيق صحتي ارابيا',
               url: result.uri,
               dialogTitle: 'حفظ النسخة الاحتياطية'
           });

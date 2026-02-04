@@ -28,7 +28,7 @@ const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({ isOpen, onClose }) => {
           
           <section>
             <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">1. مقدمة</h3>
-            <p>نحن في تطبيق "صحتي" نولي اهتماماً كبيراً لخصوصيتك. توضح هذه السياسة كيفية جمعنا واستخدامنا وحمايتنا لمعلوماتك الشخصية.</p>
+            <p>نحن في تطبيق "صحتي ارابيا" نولي اهتماماً كبيراً لخصوصيتك. توضح هذه السياسة كيفية جمعنا واستخدامنا وحمايتنا لمعلوماتك الشخصية.</p>
           </section>
 
           <section>

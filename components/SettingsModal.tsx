@@ -1,13 +1,13 @@
 import React, { useRef, useState } from 'react';
 import { AppState } from '../types';
-import { X, Settings, Copy, Bell, Cloud, Sparkles, Download, Upload, LogIn, LogOut, Clock, Loader2, Link as LinkIcon } from 'lucide-react';
+import { X, Settings, Copy, Bell, Cloud, Sparkles, Download, Upload, LogIn, LogOut, Clock, Loader2, Link as LinkIcon, Share2, ChevronLeft, Database } from 'lucide-react';
 import { TIME_SLOT_CONFIG } from '../constants';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { User } from '../services/authService';
 import { ScrollHint } from './ScrollHint';
-import { resolvePatientId } from '../services/firebaseService';
+import { resolvePatientId, testConnection, retryShortCodeGeneration } from '../services/firebaseService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -22,6 +22,7 @@ interface SettingsModalProps {
   onGoogleSignIn: () => Promise<void>;
   onAppleSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
+  onOpenShare: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -36,9 +37,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   user,
   onGoogleSignIn,
   onAppleSignIn,
-  onSignOut
+  onSignOut,
+  onOpenShare
 }) => {
-  if (!isOpen) return null;
+  if (!isOpen) return null; // Restored conditional rendering for simple visibility control
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -122,11 +124,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md transition-colors animate-in fade-in">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[3rem] shadow-2xl relative max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 relative">
+    <div className="fixed inset-0 z-[200] w-full h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto pb-40 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="w-full max-w-2xl mx-auto p-6 relative">
         <button onClick={onClose} className="absolute top-8 left-8 p-3.5 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-2xl active:scale-90 z-10"><X className="w-7 h-7"/></button>
-        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-10 text-right flex items-center justify-end gap-4 mt-8">الإعدادات <Settings className="text-blue-600 w-8 h-8" /></h2>
+        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-10 text-right flex items-center justify-start gap-4 mt-8">الإعدادات <Settings className="text-blue-600 w-8 h-8" /></h2>
         <div className="space-y-8 pb-4">
           {state.caregiverMode && (
             <div className="space-y-4 text-right">
@@ -192,18 +193,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
             </div>
           )}
-          <div className="space-y-3 text-right">
-            <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 mr-2 uppercase">اسم المستخدم</label>
-            <input type="text" value={state.patientName} onChange={(e) => updateState({ patientName: e.target.value })} className="w-full p-6 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 focus:border-blue-500 outline-none rounded-[1.8rem] font-black text-lg text-right shadow-sm" />
-          </div>
-
-          <div className="p-7 bg-blue-50/50 dark:bg-blue-900/10 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/30 text-right space-y-5">
-            <p className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">رمز المزامنة (ID)</p>
-            <div className="flex items-center gap-4">
-              <button onClick={() => { navigator.clipboard.writeText(state.syncCode || state.patientId); alert("تم نسخ الرمز بنجاح ✅"); }} className="p-5 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-2xl border dark:border-slate-700 active:scale-90 shadow-sm"><Copy className="w-6 h-6"/></button>
-              <div className="flex-1 p-5 bg-white dark:bg-slate-800 border-2 border-blue-100 dark:border-blue-900/30 rounded-[1.5rem] text-center font-black text-3xl text-slate-800 dark:text-slate-100 uppercase tabular-nums shadow-inner">{state.syncCode || state.patientId}</div>
-            </div>
-          </div>
           <div className="space-y-4 text-right">
             <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 mr-2 uppercase">نوع الحساب</label>
             <div className="relative">
@@ -219,6 +208,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
           </div>
+
+          <div className="space-y-3 text-right">
+            <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 mr-2 uppercase">اسم المستخدم</label>
+            <input type="text" value={state.patientName} onChange={(e) => updateState({ patientName: e.target.value })} className="w-full p-6 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 focus:border-blue-500 outline-none rounded-[1.8rem] font-black text-lg text-right shadow-sm" />
+            
+            <div className="grid grid-cols-2 gap-4 mt-2">
+                <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 mr-2 uppercase">السن</label>
+                    <input 
+                        type="number" 
+                        value={state.patientAge || ''} 
+                        onChange={(e) => updateState({ patientAge: parseInt(e.target.value) || 0 })} 
+                        className="w-full p-4 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 focus:border-blue-500 outline-none rounded-[1.5rem] font-black text-lg text-center shadow-sm"
+                        placeholder="0"
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 mr-2 uppercase">النوع</label>
+                    <div className="flex bg-slate-50 dark:bg-slate-800 rounded-[1.5rem] p-1 border-2 dark:border-slate-700">
+                        <button 
+                            onClick={() => updateState({ patientGender: 'male' })}
+                            className={`flex-1 py-3 rounded-[1.2rem] text-sm font-black transition-all ${state.patientGender === 'male' ? 'bg-blue-100 text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                        >
+                            ذكر
+                        </button>
+                        <button 
+                            onClick={() => updateState({ patientGender: 'female' })}
+                            className={`flex-1 py-3 rounded-[1.2rem] text-sm font-black transition-all ${state.patientGender === 'female' ? 'bg-pink-100 text-pink-600 shadow-sm' : 'text-slate-400'}`}
+                        >
+                            أنثى
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-[1.5rem] border border-blue-100 dark:border-blue-900/30 mt-2">
+                <button onClick={() => { navigator.clipboard.writeText(state.syncCode || state.patientId); alert("تم نسخ الرمز بنجاح ✅"); }} className="p-3 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-xl border dark:border-slate-700 active:scale-90 shadow-sm"><Copy className="w-5 h-5"/></button>
+                <div className="text-right">
+                    <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-0.5">رمز المزامنة (ID)</p>
+                    <div className="flex items-center justify-end gap-2">
+                         {(state.syncCode || state.patientId).length > 8 && (
+                             <button 
+                                onClick={async () => {
+                                    if (!user?.uid) {
+                                        alert("يجب تسجيل الدخول أولاً لتوليد رمز قصير.");
+                                        return;
+                                    }
+                                    const btn = document.getElementById('gen-code-btn');
+                                    if(btn) btn.innerText = '...';
+                                    try {
+                                        const code = await retryShortCodeGeneration(user.uid);
+                                        updateState({ syncCode: code });
+                                        alert("تم توليد رمز قصير بنجاح! ✅");
+                                    } catch(e: any) {
+                                        alert("فشل توليد الرمز: " + e.message + "\nتأكد من اتصال الإنترنت وصلاحيات الحساب.");
+                                    } finally {
+                                        if(btn) btn.innerText = 'تحديث';
+                                    }
+                                }}
+                                id="gen-code-btn"
+                                className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded-lg font-bold shadow-sm hover:bg-blue-700 transition-colors"
+                             >
+                                تحديث
+                             </button>
+                         )}
+                         <p className="font-black text-xl text-slate-800 dark:text-slate-100 uppercase tabular-nums">{state.syncCode || state.patientId}</p>
+                    </div>
+                </div>
+            </div>
+          </div>
+
           <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-[2.2rem] border border-slate-100 dark:border-slate-700 text-right space-y-4">
             <div className="flex items-center justify-end gap-2 text-slate-800 dark:text-white font-black">
               <h3>نسخ احتياطي ومزامنة</h3>
@@ -241,6 +301,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span>استعادة نسخة</span>
               </button>
             </div>
+            <button 
+                onClick={async () => {
+                    const btn = document.getElementById('test-db-btn');
+                    if (btn) btn.innerText = 'جاري الاتصال...';
+                    const res = await testConnection();
+                    alert(res.message);
+                    if (btn) btn.innerText = 'اختبار اتصال قاعدة البيانات';
+                }}
+                id="test-db-btn"
+                className="w-full py-3 mt-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-[1.2rem] font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+                <Database className="w-4 h-4" />
+                <span>اختبار اتصال قاعدة البيانات</span>
+            </button>
           </div>
 
           <div className="p-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-[2.2rem] border border-blue-100 dark:border-blue-900/40 text-right space-y-4">
@@ -292,8 +366,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div className="grid grid-cols-2 gap-3">
               {(Object.keys(state.slotHours || {}) as Array<keyof typeof state.slotHours>).map((slot) => (
-                <div key={slot} className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
-                  <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-1">{TIME_SLOT_CONFIG[slot]?.label || slot}</label>
+                <div key={slot} className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-2">
+                  <input 
+                      type="text"
+                      value={state.customSlotNames?.[slot] || TIME_SLOT_CONFIG[slot]?.label || ''}
+                      onChange={(e) => {
+                           const val = e.target.value;
+                           updateState(prev => ({
+                               ...prev,
+                               customSlotNames: {
+                                   ...(prev.customSlotNames || {}),
+                                   [slot]: val
+                               }
+                           }));
+                      }}
+                      className="w-full bg-transparent text-[11px] font-bold text-slate-400 dark:text-slate-500 mb-1 outline-none border-b border-dashed border-slate-200 focus:border-blue-500 focus:text-blue-600 transition-colors text-right"
+                      placeholder="اسم الموعد"
+                  />
                   <div className="flex items-center gap-2" dir="ltr">
                     <input 
                       type="time" 
@@ -395,11 +484,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
              )}
           </div>
 
-          <button onClick={onClose} className={`w-full py-6 text-white rounded-[2rem] font-black text-xl shadow-2xl active:scale-[0.98] transition-all mt-4 ${state.caregiverMode ? 'bg-emerald-600' : 'bg-slate-900 dark:bg-slate-800'}`}>حفظ الإعدادات</button>
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-2 shadow-lg border border-slate-100 dark:border-slate-800">
+                <button onClick={onOpenShare} className="w-full p-6 flex items-center justify-between group active:scale-[0.98] transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-3.5 rounded-2xl text-white shadow-lg group-hover:scale-110 transition-transform">
+                      <Share2 className="w-6 h-6" />
+                    </div>
+                    <div className="text-right">
+                      <h3 className="font-bold text-slate-800 dark:text-white text-lg">مشاركة التطبيق</h3>
+                      <p className="text-xs text-slate-500 font-medium mt-1">شارك الخير مع من تحب</p>
+                    </div>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 group-hover:text-indigo-600 transition-colors">
+                    <ChevronLeft className="w-6 h-6" />
+                  </div>
+                </button>
+              </div>
+
+              <button onClick={onClose} className={`w-full py-6 text-white rounded-[2rem] font-black text-xl shadow-2xl active:scale-[0.98] transition-all mt-4 ${state.caregiverMode ? 'bg-emerald-600' : 'bg-slate-900 dark:bg-slate-800'}`}>العودة للرئيسية</button>
         </div>
       </div>
       <ScrollHint />
-      </div>
     </div>
   );
 };

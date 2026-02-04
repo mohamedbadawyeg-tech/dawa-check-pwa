@@ -27,23 +27,41 @@ async function checkAndSendMedications() {
   
   console.log(`Running medication check for Cairo Hour: ${currentHour}`);
 
-  // Get all patients with an FCM token
-  const snapshot = await db.collection('patients').get();
+  // Get all users from Firestore
+  const usersRef = db.collection('users');
+  const snapshot = await usersRef.get();
   
   const promises = [];
   let sentCount = 0;
+  let patientCount = 0;
 
   snapshot.forEach(doc => {
-    const data = doc.data();
-    const token = data.fcmToken;
+    patientCount++;
+    const userRecord = doc.data();
     
-    // Skip if no token or no medications
-    if (!token || !data.medications) return;
+    // Structure in Firestore is: users/{uid} document with fields 'data' (AppState) and 'fcmToken'
+    const data = userRecord.data;
+    const token = userRecord.fcmToken;
+    
+    // Skip if no token or no data or no medications
+    if (!token || !data || !data.medications) return;
 
     // Find medications scheduled for this hour
     const dueMeds = data.medications.filter(med => {
-      const customHour = data.timeSlotSettings?.[med.timeSlot]?.hour;
-      const slotHour = customHour !== undefined ? customHour : SLOT_HOURS[med.timeSlot];
+      // Check for custom slot hours in data.slotHours (as per AppState structure in App.tsx)
+      // Note: App.tsx uses state.slotHours, here we should check data.slotHours
+      const customHour = data.slotHours?.[med.timeSlot];
+      
+      let slotHour;
+      if (typeof customHour === 'number') {
+          slotHour = customHour;
+      } else if (typeof customHour === 'string') {
+          // Parse "HH:MM" format
+          slotHour = parseInt(customHour.split(':')[0]);
+      } else {
+          slotHour = SLOT_HOURS[med.timeSlot];
+      }
+      
       return slotHour === currentHour;
     });
 
@@ -56,8 +74,8 @@ async function checkAndSendMedications() {
       const gender = data.patientGender;
 
       if (age > 0) {
-    if (age < 40) friendlyPrefix = gender === 'female' ? `يا آنسة ${name}` : `يا بطل ${name}`;
-    else if (age < 60) friendlyPrefix = gender === 'female' ? `يا أستاذة ${name}` : `يا أستاذ ${name}`;
+        if (age < 40) friendlyPrefix = gender === 'female' ? `يا آنسة ${name}` : `يا بطل ${name}`;
+        else if (age < 60) friendlyPrefix = gender === 'female' ? `يا أستاذة ${name}` : `يا أستاذ ${name}`;
         else friendlyPrefix = gender === 'female' ? `يا حاجة ${name}` : `يا حاج ${name}`;
       } else {
         friendlyPrefix = `يا ${name}`;
@@ -90,7 +108,7 @@ async function checkAndSendMedications() {
   });
 
   await Promise.all(promises);
-  return { sentCount, patientCount: snapshot.size, cairoTime };
+  return { sentCount, patientCount, cairoTime };
 }
 
 /**

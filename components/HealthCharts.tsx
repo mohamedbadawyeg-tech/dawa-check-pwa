@@ -8,9 +8,10 @@ interface HealthChartsProps {
 }
 
 export const HealthCharts: React.FC<HealthChartsProps> = ({ reports }) => {
-  const dates = Object.keys(reports).sort().slice(-7); // Last 7 days
+  const safeReports = reports || {};
+  const dates = Object.keys(safeReports).sort().slice(-7); // Last 7 days
   const data = dates.map(date => {
-    const r = reports[date].report;
+    const r = safeReports[date].report;
     return {
       date: date.split('-').slice(1).join('/'),
       systolic: r.systolicBP || 0,

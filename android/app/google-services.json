@@ -1,47 +1,48 @@
-{
-  "project_info": {
-    "project_number": "608914168606",
-    "project_id": "sahaty-app-68685",
-    "storage_bucket": "sahaty-app-68685.firebasestorage.app"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:608914168606:android:c69b905f228a0e5c67070f",
-        "android_client_info": {
-          "package_name": "com.sahaty.app"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "608914168606-p2i3m0cfo3so6mr95ej633a2uksefp7b.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.sahaty.app",
-            "certificate_hash": "0fdf0e2436ac0fd1663218c71331fab3f628f0a1"
-          }
-        },
-        {
-          "client_id": "608914168606-cr9293qscukk9ngu4fkllcl2nbug8usf.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyA19OCKhLfBnN-Z_7qeat5Skj6uhk4pP88"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "608914168606-cr9293qscukk9ngu4fkllcl2nbug8usf.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
-}
+{ 
+   "project_info": { 
+     "project_number": "987933662797", 
+     "firebase_url": "https://sehati-arabia-default-rtdb.firebaseio.com", 
+     "project_id": "sehati-arabia", 
+     "storage_bucket": "sehati-arabia.firebasestorage.app" 
+   }, 
+   "client": [ 
+     { 
+       "client_info": { 
+         "mobilesdk_app_id": "1:987933662797:android:d2f738fe78534607928604", 
+         "android_client_info": { 
+           "package_name": "com.sahaty.app.v2" 
+         } 
+       }, 
+       "oauth_client": [ 
+         { 
+           "client_id": "987933662797-bfcmqjhdenvp600p9vimdpes441kkv0i.apps.googleusercontent.com", 
+           "client_type": 1, 
+           "android_info": { 
+             "package_name": "com.sahaty.app.v2", 
+             "certificate_hash": "f158f207914e852783431167bf8576edd1cd6904" 
+           } 
+         }, 
+         { 
+           "client_id": "987933662797-q2kt60suqdjauuv6c38icp8st88336qh.apps.googleusercontent.com", 
+           "client_type": 3 
+         } 
+       ], 
+       "api_key": [ 
+         { 
+           "current_key": "AIzaSyA-XicMaFElaHkqvbvQBOPwbgxC5CbUnFg" 
+         } 
+       ], 
+       "services": { 
+         "appinvite_service": { 
+           "other_platform_oauth_client": [ 
+             { 
+               "client_id": "987933662797-q2kt60suqdjauuv6c38icp8st88336qh.apps.googleusercontent.com", 
+               "client_type": 3 
+             } 
+           ] 
+         } 
+       } 
+     } 
+   ], 
+   "configuration_version": "1" 
+ }

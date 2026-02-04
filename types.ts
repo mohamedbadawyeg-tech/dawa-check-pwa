@@ -21,6 +21,7 @@ export interface Medication {
   sideEffects?: string[]; 
   stock?: number;
   refillUnit?: 'strip' | 'box' | 'bottle' | 'other';
+  notificationTime?: string;
 }
 
 export interface HealthReport {
@@ -97,6 +98,7 @@ export interface AppState {
   caregiverTargetId: string | null;
   syncCode?: string;
   slotHours: Record<TimeSlot, string>;
+  customSlotNames?: Record<TimeSlot, string>;
   aiSubscriptionActive?: boolean;
   medications: Medication[];
   takenMedications: Record<string, boolean>;

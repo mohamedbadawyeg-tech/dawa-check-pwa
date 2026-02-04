@@ -8,9 +8,12 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-import { analyzeHealthStatus, generateMedicationPlanFromText, generateMedicationPlanFromImage, generateDailyHealthTip, generateDietPlan, checkDrugInteractions } from './services/geminiService';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
+import { analyzeHealthStatus, generateMedicationPlanFromText, generateMedicationPlanFromImage, generateDailyHealthTip, generateDietPlan, checkDrugInteractions, getDrugInfo, coordinateMedications } from './services/geminiService';
 import { HealthCharts } from './components/HealthCharts';
+import { HealthChartsModal } from './components/HealthChartsModal';
 import { FamilyChat } from './components/FamilyChat';
+import { ShareModal } from './components/ShareModal';
 import { DraggableLateAlert } from './components/DraggableLateAlert';
 import { VoiceCommandButton } from './components/VoiceCommandButton';
 import { initializePurchases, checkSubscriptionStatus, purchasePackage, getOfferings, restorePurchases } from './services/purchaseService';
@@ -103,6 +106,8 @@ const DEFAULT_REPORT: HealthReport = {
   mood: ''
 };
 
+const ENABLE_ONLINE_STORE = false;
+
 /**
  * Robustly sanitizes an object to ensure it is safe for JSON stringification.
  * Specifically handles circular references and prunes complex non-plain objects.
@@ -140,6 +145,31 @@ const makeJsonSafe = (obj: any): any => {
     console.error("Safe stringify failed in makeJsonSafe", e);
     return {};
   }
+};
+
+/**
+ * Normalizes data for hash comparison by removing null/undefined values and sorting keys.
+ * This prevents infinite sync loops caused by Firebase returning null vs local undefined.
+ */
+const cleanForHash = (obj: any): any => {
+  if (obj === null || obj === undefined) return undefined;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(cleanForHash); // Arrays keep structure (undefined becomes null in JSON)
+  }
+  
+  if (typeof obj === 'object') {
+    const newObj: any = {};
+    Object.keys(obj).sort().forEach(key => {
+      const val = cleanForHash(obj[key]);
+      if (val !== undefined && val !== null) {
+        newObj[key] = val;
+      }
+    });
+    return newObj;
+  }
+  
+  return obj;
 };
 
 const computeDailyQuickTip = (state: AppState): string => {
@@ -273,6 +303,16 @@ const TOUR_STEPS = [
     content: 'هنا يظهر اسمك وحالتك، ويمكنك تفعيل وضع المرافق أو تعديل الإعدادات.'
   },
   {
+    targetId: 'dark-mode-toggle',
+    title: 'الوضع الليلي',
+    content: 'يمكنك التبديل بين الوضع النهاري والليلي لراحة عينيك.'
+  },
+  {
+    targetId: 'calendar-btn',
+    title: 'التقويم',
+    content: 'اضغط هنا لفتح التقويم وعرض سجل الأدوية والتحاليل السابق.'
+  },
+  {
     targetId: 'medication-schedule',
     title: 'جدول الأدوية اليومي',
     content: 'هنا تظهر أدويتك مرتبة حسب الوقت. اضغط على الدواء لتسجيل تناوله.'
@@ -282,16 +322,10 @@ const TOUR_STEPS = [
     title: 'التحليل الصحي الذكي',
     content: 'هنا يمكنك الحصول على تحليل شامل لحالتك الصحية وتوصيات مخصصة بناءً على أدويتك ونتائج تحاليلك باستخدام الذكاء الاصطناعي.'
   },
-
   {
     targetId: 'report-btn',
-    title: 'تقرير صحتي',
+    title: 'تقرير صحتي ارابيا',
     content: 'سجل متابعاتك اليومية (ضغط، سكر، أعراض) لمتابعة تطور حالتك.'
-  },
-  {
-    targetId: 'pharmacy-btn',
-    title: 'الصيدلية',
-    content: 'اطلب أدويتك من أقرب صيدلية أو ابحث عنها أونلاين.'
   },
   {
     targetId: 'ai-btn',
@@ -299,9 +333,14 @@ const TOUR_STEPS = [
     content: 'اضغط هنا في أي وقت للحصول على تحليل فوري أو نصيحة طبية.'
   },
   {
-    targetId: 'calendar-btn',
-    title: 'التقويم',
-    content: 'راجع سجل التزامك بالأدوية وتاريخك الصحي.'
+    targetId: 'mic-btn',
+    title: 'الأوامر الصوتية',
+    content: 'تحكم في التطبيق بصوتك: أضف دواء، افتح التقويم، أو سجل أعراضك بسهولة.'
+  },
+  {
+    targetId: 'share-btn',
+    title: 'مشاركة الملف',
+    content: 'شارك تقريرك الصحي أو قائمة أدويتك مع طبيبك أو عائلتك بضغطة زر.'
   },
   {
     targetId: 'settings-btn',
@@ -313,6 +352,7 @@ const TOUR_STEPS = [
 const App: React.FC = () => {
   const today = new Date().toISOString().split('T')[0];
   const [now, setNow] = useState(new Date());
+  const [calendarDate, setCalendarDate] = useState(new Date());
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -324,6 +364,7 @@ const App: React.FC = () => {
   const lastLocalActionTime = useRef<number>(0);
   const lastSyncedHash = useRef<string>("");
   const isDirty = useRef<boolean>(false);
+  const isRemoteUpdate = useRef<boolean>(false);
   const lastHandledReminderTime = useRef<number>(0);
   const adherenceJsonInputRef = useRef<HTMLInputElement | null>(null);
   const hasGeneratedMotivationRef = useRef<boolean>(false);
@@ -381,6 +422,7 @@ const App: React.FC = () => {
           aiSubscriptionActive: parsed.aiSubscriptionActive ?? false,
           caregiverMode: parsed.caregiverMode ?? false,
           slotHours: parsed.slotHours || SLOT_HOURS,
+          customSlotNames: parsed.customSlotNames || {},
           currentReport: isSameDay ? (parsed.currentReport || { ...DEFAULT_REPORT, date: today }) : { ...DEFAULT_REPORT, date: today },
           caregiverHistory: Array.isArray(parsed.caregiverHistory) ? parsed.caregiverHistory.filter((h: any) => h.id && h.id.length <= 8) : [],
           familyMessages: Array.isArray(parsed.familyMessages) ? parsed.familyMessages : [],
@@ -395,6 +437,7 @@ const App: React.FC = () => {
       caregiverMode: false,
       caregiverTargetId: null,
       slotHours: SLOT_HOURS,
+      customSlotNames: {},
       aiSubscriptionActive: false,
       medications: [],
       medicalHistorySummary: '',
@@ -444,11 +487,16 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isMedManagerOpen, setIsMedManagerOpen] = useState(false);
+  const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
+  const [bulkAddInput, setBulkAddInput] = useState('');
+  const [isCoordinating, setIsCoordinating] = useState(false);
   const [isPharmacyModalOpen, setIsPharmacyModalOpen] = useState(false);
   const [isMedicalSummaryOpen, setIsMedicalSummaryOpen] = useState(false);
+  const [isHealthChartsOpen, setIsHealthChartsOpen] = useState(false);
   const [isDietModalOpen, setIsDietModalOpen] = useState(false);
   const [isFamilyChatOpen, setIsFamilyChatOpen] = useState(false);
   const [isProceduresModalOpen, setIsProceduresModalOpen] = useState(false);
@@ -502,6 +550,22 @@ const App: React.FC = () => {
   const [hasPrescriptionImage, setHasPrescriptionImage] = useState<boolean>(false);
   const [showOnboardingSplash, setShowOnboardingSplash] = useState(true);
   const [splashFading, setSplashFading] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const initialHeight = window.innerHeight;
+    const handleResize = () => {
+      const currentHeight = window.innerHeight;
+      // If height difference is significant (> 150px), assume keyboard is open
+      if (initialHeight - currentHeight > 150) {
+        setIsKeyboardOpen(true);
+      } else {
+        setIsKeyboardOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Chat UI State
   const [chatMessages, setChatMessages] = useState<Array<{
@@ -1142,11 +1206,33 @@ const App: React.FC = () => {
   }, [state.remoteReminder, isMuted, state.caregiverMode]);
 
   useEffect(() => {
-    const targetId = state.caregiverMode ? state.caregiverTargetId : state.patientId;
-    if (!targetId || targetId.length < 4) return;
-    const unsubscribe = listenToPatient(targetId, (remoteData) => {
+    let isMounted = true;
+    const subscribe = async () => {
+      let targetId = state.caregiverMode ? state.caregiverTargetId : state.patientId;
+      if (!targetId || targetId.length < 4) return;
+      if (state.caregiverMode && targetId && targetId.length === 6) {
+        try {
+          const resolved = await resolvePatientId(targetId);
+          if (!isMounted) return; // Stop if unmounted during await
+          if (resolved && resolved !== targetId) {
+            console.log('[Caregiver] Resolved short code to:', resolved);
+            setState(prev => ({ ...prev, caregiverTargetId: resolved }));
+            targetId = resolved;
+          }
+        } catch (e) { console.error("Failed to resolve caregiver code", e); }
+      }
+      
+      if (!isMounted) return; // Double check before subscribing
+
+      const unsubscribe = listenToPatient(targetId, (remoteData) => {
+      if (!isMounted) return;
       const nowMs = Date.now();
       if (nowMs - lastLocalActionTime.current < 3000) return;
+      
+      // Mark as remote update to prevent local side-effects from triggering sync loop
+      console.log('🔒 [Sync] Marking as remote update - preventing echo');
+      isRemoteUpdate.current = true;
+      
       setState(prev => {
         // Calculate next values based on remoteData or fallback to prev
         const nextMedications = remoteData.medications || prev.medications;
@@ -1159,22 +1245,23 @@ const App: React.FC = () => {
         const nextUpcomingProcedures = remoteData.upcomingProcedures || prev.upcomingProcedures;
         const nextLabTests = remoteData.labTests || prev.labTests || [];
         const nextLastDailyTipDate = remoteData.lastDailyTipDate || prev.lastDailyTipDate;
+        const nextFamilyMessages = remoteData.familyMessages || prev.familyMessages || [];
 
         // Construct subsets for hash comparison
-        const nextSubset = makeJsonSafe({
+        const nextSubset = cleanForHash(makeJsonSafe({
           m: nextMedications, tr: nextTaken, cr: nextReport,
           dr: nextDailyReports, rr: nextRemoteReminder, mh: nextHistorySummary, 
           dg: nextDietGuidelines, up: nextUpcomingProcedures, tip: nextLastDailyTipDate,
-          labs: nextLabTests
-        });
+          labs: nextLabTests, fm: nextFamilyMessages
+        }));
         const nextHash = JSON.stringify(nextSubset);
 
-        const localSubset = makeJsonSafe({
+        const localSubset = cleanForHash(makeJsonSafe({
           m: prev.medications, tr: prev.takenMedications, cr: prev.currentReport,
           dr: prev.dailyReports, rr: prev.remoteReminder, mh: prev.medicalHistorySummary, 
           dg: prev.dietGuidelines, up: prev.upcomingProcedures, tip: prev.lastDailyTipDate,
-          labs: prev.labTests
-        });
+          labs: prev.labTests, fm: prev.familyMessages
+        }));
         const localHash = JSON.stringify(localSubset);
 
         if (nextHash !== localHash) {
@@ -1188,6 +1275,9 @@ const App: React.FC = () => {
             takenMedications: nextTaken,
             dailyReports: nextDailyReports,
             patientName: remoteData.patientName || prev.patientName,
+            patientAge: remoteData.patientAge,
+            patientGender: remoteData.patientGender,
+            syncCode: remoteData.syncCode,
             remoteReminder: nextRemoteReminder,
             medicalHistorySummary: nextHistorySummary,
             dietGuidelines: nextDietGuidelines,
@@ -1195,8 +1285,9 @@ const App: React.FC = () => {
             labTests: nextLabTests,
             lastDailyTipDate: nextLastDailyTipDate,
             dailyTipContent: remoteData.dailyTipContent || prev.dailyTipContent,
+            familyMessages: nextFamilyMessages,
             caregiverHistory: (() => {
-                if (prev.caregiverMode && prev.caregiverTargetId && remoteData.patientName && prev.caregiverTargetId.length <= 8) {
+                if (prev.caregiverMode && prev.caregiverTargetId && remoteData.patientName) {
                     const newEntry = { id: prev.caregiverTargetId, name: remoteData.patientName, lastUsed: new Date().toISOString() };
                     const list = prev.caregiverHistory || [];
                     const filtered = list.filter(h => h.id !== newEntry.id);
@@ -1208,21 +1299,30 @@ const App: React.FC = () => {
         }
         return prev;
       });
-    });
-    return () => unsubscribe();
+      });
+      unsubRef.fn = unsubscribe;
+    };
+    const unsubRef: { fn?: () => void } = {};
+    subscribe().then(() => {}).catch(() => {});
+    return () => { isMounted = false; if (unsubRef.fn) unsubRef.fn(); };
   }, [state.caregiverMode, state.caregiverTargetId, state.patientId]);
 
   useEffect(() => {
     const sync = async () => {
       const targetId = state.caregiverMode ? state.caregiverTargetId : state.patientId;
       if (!targetId || !isOnline || !isDirty.current) return;
-      const safeStateSubset = makeJsonSafe({
+      const safeStateSubset = cleanForHash(makeJsonSafe({
         m: state.medications, tr: state.takenMedications, cr: state.currentReport,
         dr: state.dailyReports, rr: state.remoteReminder, mh: state.medicalHistorySummary, dg: state.dietGuidelines,
-        up: state.upcomingProcedures, tip: state.lastDailyTipDate, labs: state.labTests
-      });
+        up: state.upcomingProcedures, tip: state.lastDailyTipDate, labs: state.labTests, fm: state.familyMessages
+      }));
       const currentHash = JSON.stringify(safeStateSubset);
-      if (currentHash === lastSyncedHash.current) { isDirty.current = false; return; }
+      if (currentHash === lastSyncedHash.current) { 
+          // console.log('✅ [Sync] State matches last synced hash - no upload needed');
+          isDirty.current = false; 
+          return; 
+      }
+      console.log('📤 [Sync] Uploading changes to cloud...');
       setIsSyncing(true);
       try {
         await syncPatientData(targetId, state);
@@ -1233,10 +1333,18 @@ const App: React.FC = () => {
     };
     const timer = setTimeout(sync, 2500);
     return () => clearTimeout(timer);
-  }, [state.medications, state.currentReport, state.takenMedications, state.dailyReports, state.medicalHistorySummary, state.dietGuidelines, state.upcomingProcedures, isOnline, state.caregiverMode, state.caregiverTargetId, state.lastDailyTipDate, state.remoteReminder, state.labTests]);
+  }, [state.medications, state.currentReport, state.takenMedications, state.dailyReports, state.medicalHistorySummary, state.dietGuidelines, state.upcomingProcedures, isOnline, state.caregiverMode, state.caregiverTargetId, state.lastDailyTipDate, state.remoteReminder, state.labTests, state.patientId, state.familyMessages]);
 
   useEffect(() => {
     if (state.caregiverMode) return;
+    
+    // If the update came from remote, do NOT regenerate tip immediately to avoid sync loops
+    if (isRemoteUpdate.current) {
+        // We will reset isRemoteUpdate in the cleanup effect
+        console.log('🛑 [Sync] Skipping local side-effect (Daily Tip) because update came from remote');
+        return;
+    }
+
     setState(prev => {
       if (prev.caregiverMode) return prev;
       const todayStr = today;
@@ -1251,10 +1359,37 @@ const App: React.FC = () => {
     });
   }, [state.currentReport, state.medications, state.caregiverMode]);
 
+  // Effect to reset isRemoteUpdate after render cycles
+  useEffect(() => {
+      isRemoteUpdate.current = false;
+  });
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!state.syncCode && state.patientId) {
+        try {
+          const code = await getOrGenerateShortCode(state.patientId);
+          setState(prev => ({ ...prev, syncCode: code }));
+        } catch (e) { console.error("Failed to generate sync code", e); }
+      }
+    })();
+  }, [state.syncCode, state.patientId]);
 
   const activeMedications = state.medications;
   const activeTakenMeds = state.takenMedications;
@@ -1292,7 +1427,8 @@ const App: React.FC = () => {
     const notifications: any[] = [];
     
     for (const med of meds) {
-        const slotTimeStr = state.slotHours?.[med.timeSlot] || SLOT_HOURS[med.timeSlot];
+        // Use custom notification time if set, otherwise fallback to slot time
+        const slotTimeStr = med.notificationTime || state.slotHours?.[med.timeSlot] || SLOT_HOURS[med.timeSlot];
         const [hStr, mStr] = slotTimeStr.toString().split(':');
         const h = parseInt(hStr);
         const m = parseInt(mStr || '0');
@@ -1557,7 +1693,7 @@ const App: React.FC = () => {
            const slotsToUse = recurringSlots.slice(0, recurringCount);
            
            slotsToUse.forEach((slot, index) => {
-               const suffix = TIME_SLOT_CONFIG[slot].label;
+               const suffix = state.customSlotNames?.[slot] || TIME_SLOT_CONFIG[slot].label;
                const timeVal = state.slotHours?.[slot] || SLOT_HOURS[slot];
                const timeStr = formatHour(timeVal);
                const name = `${editingMed.name} - ${suffix} (${timeStr})`;
@@ -1584,7 +1720,7 @@ const App: React.FC = () => {
             const newMed: Medication = { 
               ...(editingMed as Medication), 
               id: `med-${Date.now()}`,
-              frequencyLabel: TIME_SLOT_CONFIG[editingMed.timeSlot || 'morning-fasting'].label,
+              frequencyLabel: state.customSlotNames?.[editingMed.timeSlot || 'morning-fasting'] || TIME_SLOT_CONFIG[editingMed.timeSlot || 'morning-fasting'].label,
               stock
             };
             newMeds = [...prev.medications, newMed];
@@ -1870,6 +2006,39 @@ const App: React.FC = () => {
         return;
     }
 
+    if (lower.includes('تحليل صحي') || lower.includes('حالة صحية') || lower.includes('طمني على صحتي')) {
+        handleAI();
+        speakText("جاري تحليل حالتك الصحية، لحظات من فضلك");
+        return;
+    }
+
+    if (lower.includes('مشاركة') || lower.includes('واتساب') || lower.includes('ارسال التقرير')) {
+        shareReportToWhatsApp();
+        speakText("جاري تحضير التقرير للمشاركة عبر واتساب");
+        return;
+    }
+
+    if (lower.includes('اشتراك') || lower.includes('باقة')) {
+        const status = state.aiSubscriptionActive ? "اشتراكك مفعل، استمتع بجميع المميزات الذكية" : "اشتراكك غير مفعل، يرجى التجديد للاستفادة من خدمات الذكاء الاصطناعي";
+        speakText(status);
+        alert(status);
+        return;
+    }
+
+    if (lower.includes('نصيحة') || lower.includes('معلومة')) {
+        const tip = state.dailyTipContent || computeDailyQuickTip(state);
+        speakText(`نصيحة اليوم: ${tip}`);
+        alert(tip);
+        return;
+    }
+
+    if (lower.includes('مساعدة') || lower.includes('اوامر') || lower.includes('أوامر') || lower.includes('ماذا استطيع ان اقول')) {
+        const helpText = "يمكنك قول: أضف دواء، تحليل صحي، نصيحة، مشاركة التقرير، إعدادات، أو جدول دواء";
+        speakText(helpText);
+        alert(helpText);
+        return;
+    }
+
     // 4. Existing Logic (Mark as Taken)
     if (lower.includes('أخدت') || lower.includes('تناولت') || lower.includes('اخذت')) {
       const med = state.medications.find(m => lower.includes(m.name.toLowerCase()));
@@ -2051,6 +2220,7 @@ const App: React.FC = () => {
         } catch (e) {
             console.error("Native Speech Error:", e);
             setIsVoiceListening(false);
+            alert("حدث خطأ في ميزة التعرف على الصوت. يرجى التأكد من منح صلاحية الميكروفون ثم المحاولة مرة أخرى.");
         }
         return;
     }
@@ -2117,6 +2287,7 @@ const App: React.FC = () => {
                   const parsed = JSON.parse(saved);
                   // Merge restored data but keep critical session flags if needed
                   // We update patientId to match the logged in user
+                  isDirty.current = true; // Force sync after restore
                   setState(prev => ({ 
                       ...prev, 
                       ...parsed, 
@@ -2138,6 +2309,7 @@ const App: React.FC = () => {
                   }
               } else {
                   // No data found, but let's update patientId to user uid for future saves
+                  isDirty.current = true; // Force sync for new user
                   setState(prev => ({ ...prev, patientId: u.uid }));
               }
           } catch (e) {
@@ -2205,8 +2377,8 @@ const App: React.FC = () => {
   };
 
   const renderCalendar = () => {
-    const year = now.getFullYear();
-    const month = now.getMonth();
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const days = [];
@@ -2302,7 +2474,7 @@ const App: React.FC = () => {
                             (window as any).plugins.intentShim.startActivity(
                                 {
                                     action: "android.settings.action.MANAGE_OVERLAY_PERMISSION",
-                                    data: "package:com.sahaty.app"
+                                    data: "package:com.sahaty.app.v2"
                                 },
                                 () => console.log("Overlay settings opened"),
                                 (err: any) => {
@@ -2376,7 +2548,7 @@ const App: React.FC = () => {
               (window as any).plugins.intentShim.startActivity(
                   {
                       action: "android.settings.action.MANAGE_OVERLAY_PERMISSION",
-                      data: "package:com.sahaty.app"
+                      data: "package:com.sahaty.app.v2"
                   },
                   () => console.log("Overlay settings opened"),
                   (err: any) => {
@@ -2542,6 +2714,39 @@ const App: React.FC = () => {
       if (action === 'ai' || value === 'ai') {
           setOnboardingMode('ai');
           setTimeout(() => addBotMessage("يرجى كتابة الأدوية أو تصوير الروشتة.", 'form', undefined, 'meds'), 500);
+          return;
+      }
+      
+      if (action === 'OPEN_MED_MANAGER' || value === 'OPEN_MED_MANAGER') {
+          if (onboardingMeds.length === 0) {
+              addBotMessage("أضف دواء أولاً.");
+              return;
+          }
+          lastLocalActionTime.current = Date.now();
+          isDirty.current = true;
+          setState(prev => ({
+            ...prev,
+            medications: onboardingMeds
+          }));
+          setEditingMed(
+            onboardingMeds[0] || { 
+              name: '', 
+              dosage: '', 
+              timeSlot: 'morning-fasting', 
+              notes: '', 
+              isCritical: false, 
+              category: 'other', 
+              frequencyLabel: '', 
+              stock: 0, 
+              refillUnit: 'box' 
+            }
+          );
+          setIsMedManagerOpen(true);
+          return;
+      }
+      
+      if (action === 'CONTINUE_ADD' || value === 'CONTINUE_ADD') {
+          addBotMessage("تمام، يمكنك متابعة إضافة الأدوية هنا أو إنهاء لاحقاً.");
           return;
       }
 
@@ -2723,6 +2928,7 @@ const App: React.FC = () => {
         alert("من فضلك أدخل اسم الدواء والجرعة قبل الإضافة.");
         return;
       }
+      const isFirst = onboardingMeds.length === 0;
       const slot = onboardingMedDraft.timeSlot;
       const freqLabel = formatHour(SLOT_HOURS[slot]);
       const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -2791,7 +2997,7 @@ const App: React.FC = () => {
               </div>
               <div className="text-right">
                  <h1 className="text-lg font-black text-slate-900 dark:text-white">
-                   {state.patientName ? `صحتي - ${state.patientName}` : 'صحتي'}
+                   {state.patientName ? `صحتي ارابيا - ${state.patientName}` : 'صحتي ارابيا'}
                  </h1>
                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">مساعدك الشخصي</p>
               </div>
@@ -3160,7 +3366,7 @@ const App: React.FC = () => {
                     </div>
                     <div onClick={copyPatientId} className="inline-flex items-center gap-2 bg-slate-900 dark:bg-slate-800 text-white px-3 py-1.5 rounded-xl shadow-lg cursor-pointer active:scale-95 transition-all group border border-slate-700">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ID:</span>
-                      <span className="text-sm font-black text-blue-400">{state.caregiverMode ? state.caregiverTargetId : state.patientId}</span>
+                      <span className="text-sm font-black text-blue-400">{state.caregiverMode ? state.caregiverTargetId : (state.syncCode || state.patientId)}</span>
                       <Copy className="w-3 h-3 text-blue-400" />
                     </div>
                   </div>
@@ -3170,15 +3376,10 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3 w-full justify-center md:w-auto mt-4 md:mt-0 z-50">
 
 
-                 <div className="relative group">
-                   <button id="settings-btn" onClick={() => setIsSettingsOpen(true)} className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-100 dark:border-slate-700 active:scale-90 transition-all text-slate-600 dark:text-slate-300">
-                     <Settings className="w-6 h-6" />
-                   </button>
- 
-                 </div>
+
 
                  <div className="relative group">
-                   <button onClick={toggleDarkMode} className={`p-3.5 rounded-2xl shadow-md border active:scale-90 transition-all ${state.darkMode ? 'bg-slate-800 border-slate-700 text-yellow-400' : 'bg-white border-slate-100 text-slate-600'}`}>
+                   <button id="dark-mode-toggle" onClick={toggleDarkMode} className={`p-3.5 rounded-2xl shadow-md border active:scale-90 transition-all ${state.darkMode ? 'bg-slate-800 border-slate-700 text-yellow-400' : 'bg-white border-slate-100 text-slate-600'}`}>
                      {state.darkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
                    </button>
  
@@ -3337,7 +3538,7 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-4">
                           <div className={`p-3.5 rounded-2xl shadow-md ${state.darkMode ? 'bg-slate-800 border-slate-700' : cfg.color.split(' ')[0]}`}>{cfg.icon}</div>
                           <div>
-                            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200">{cfg.label}</h3>
+                            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200">{state.customSlotNames?.[slot] || cfg.label}</h3>
                             <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1.5 w-fit mt-1">
                               <Clock className="w-3 h-3" /> {slotHourFormatted}
                             </span>
@@ -3347,7 +3548,7 @@ const App: React.FC = () => {
                           <button 
                             onClick={() => {
                               meds.forEach(m => handleSendReminder(m.name));
-                              alert(`تم إرسال تنبيهات للمريض بخصوص أدوية مجموعة: ${cfg.label}`);
+                              alert(`تم إرسال تنبيهات للمريض بخصوص أدوية مجموعة: ${state.customSlotNames?.[slot] || cfg.label}`);
                             }}
                             className="bg-amber-500 hover:bg-amber-600 text-white p-3 rounded-2xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-2"
                             title="تنبيه للمجموعة بالكامل"
@@ -3591,11 +3792,50 @@ const App: React.FC = () => {
             </div>
           </main>
 
-          <footer id="floating-bar" className="fixed bottom-8 left-1/2 -translate-x-1/2 w-fit max-w-[95%] bg-white/40 dark:bg-slate-900/70 backdrop-blur-3xl border border-white/30 dark:border-slate-700/60 px-8 py-5 rounded-[3.5rem] shadow-xl z-[100] flex items-center justify-center gap-10 transition-colors">
+                    <footer id="floating-bar" className={`fixed bottom-8 left-1/2 -translate-x-1/2 w-fit max-w-[95%] bg-white/40 dark:bg-slate-900/70 backdrop-blur-3xl border border-white/30 dark:border-slate-700/60 px-6 py-4 rounded-[3.5rem] shadow-xl z-[500] flex items-center justify-center gap-4 transition-all duration-300 ${isKeyboardOpen ? 'translate-y-[200%] opacity-0 pointer-events-none' : ''}`}>
             <div className="relative">
-              <button id="report-btn" onClick={() => setIsReportOpen(true)} className="w-14 h-14 flex items-center justify-center rounded-[1.6rem] text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 border dark:border-slate-700 active:scale-90 transition-all"><DoctorIcon className="w-8 h-8"/></button>
+              <button id="report-btn" onClick={() => {
+                if (isReportOpen) {
+                  setIsReportOpen(false);
+                } else {
+                  setIsReportOpen(true);
+                  setIsSettingsOpen(false);
+                  setIsPharmacyModalOpen(false);
+                  setIsShareOpen(false);
+                  setIsHealthChartsOpen(false);
+                }
+              }} className={`w-12 h-12 flex items-center justify-center rounded-[1.4rem] transition-all active:scale-90 ${isReportOpen ? 'bg-blue-600 text-white shadow-lg' : 'text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 border dark:border-slate-700'}`}>
+                <DoctorIcon className="w-6 h-6"/>
+              </button>
+              <button id="charts-btn" onClick={() => {
+                if (isHealthChartsOpen) {
+                  setIsHealthChartsOpen(false);
+                } else {
+                  setIsHealthChartsOpen(true);
+                  setIsReportOpen(false);
+                  setIsPharmacyModalOpen(false);
+                  setIsSettingsOpen(false);
+                  setIsShareOpen(false);
+                }
+              }} className={`w-12 h-12 flex items-center justify-center rounded-[1.4rem] transition-all active:scale-90 ${isHealthChartsOpen ? 'bg-indigo-600 text-white shadow-lg' : 'text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 border dark:border-slate-700'}`}>
+                <Activity className="w-6 h-6"/>
+              </button>
             </div>
-            <button id="pharmacy-btn" onClick={() => setIsPharmacyModalOpen(true)} className="w-14 h-14 flex items-center justify-center rounded-[1.6rem] text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border dark:border-slate-700 active:scale-90 transition-all"><ShoppingBag className="w-8 h-8"/></button>
+            {ENABLE_ONLINE_STORE && (
+              <button id="pharmacy-btn" onClick={() => {
+                if (isPharmacyModalOpen) {
+                  setIsPharmacyModalOpen(false);
+                } else {
+                  setIsPharmacyModalOpen(true);
+                  setIsReportOpen(false);
+                  setIsSettingsOpen(false);
+                  setIsShareOpen(false);
+                  setIsHealthChartsOpen(false);
+                }
+              }} className={`w-12 h-12 flex items-center justify-center rounded-[1.4rem] transition-all active:scale-90 ${isPharmacyModalOpen ? 'bg-emerald-600 text-white shadow-lg' : 'text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800 border dark:border-slate-700'}`}>
+                <ShoppingBag className="w-6 h-6"/>
+              </button>
+            )}
             <button
               id="ai-btn"
               onClick={() => {
@@ -3606,7 +3846,7 @@ const App: React.FC = () => {
                  }
               }}
               disabled={isAnalyzing}
-              className={`w-18 h-18 rounded-[2rem] text-white shadow-2xl active:scale-95 flex items-center justify-center border-[6px] border-white dark:border-slate-900 ${
+              className={`w-16 h-16 rounded-[2rem] text-white shadow-2xl active:scale-95 flex items-center justify-center border-[5px] border-white dark:border-slate-900 ${
                 !isAiSubscribed
                   ? 'bg-blue-600'
                   : state.caregiverMode
@@ -3614,18 +3854,42 @@ const App: React.FC = () => {
                     : 'bg-blue-600'
               }`}
             >
-              {isAnalyzing ? <RefreshCw className="w-9 h-9 animate-spin" /> : <BrainCircuit className="w-10 h-10" />}
+              {isAnalyzing ? <RefreshCw className="w-8 h-8 animate-spin" /> : <BrainCircuit className="w-8 h-8" />}
             </button>
             <button 
               id="mic-btn" 
               onClick={toggleVoiceListening} 
-              className={`w-14 h-14 flex items-center justify-center rounded-[1.6rem] active:scale-90 transition-all ${
+              className={`w-12 h-12 flex items-center justify-center rounded-[1.4rem] active:scale-90 transition-all ${
                 isVoiceListening 
                   ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' 
                   : 'text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border dark:border-slate-700'
               }`}
             >
-              {isVoiceListening ? <MicOff className="w-8 h-8"/> : <Mic className="w-8 h-8"/>}
+              {isVoiceListening ? <MicOff className="w-6 h-6"/> : <Mic className="w-6 h-6"/>}
+            </button>
+            <button id="share-btn" onClick={() => {
+              if (isShareOpen) {
+                setIsShareOpen(false);
+              } else {
+                setIsShareOpen(true);
+                setIsReportOpen(false);
+                setIsPharmacyModalOpen(false);
+                setIsSettingsOpen(false);
+              }
+            }} className={`w-12 h-12 flex items-center justify-center rounded-[1.4rem] transition-all active:scale-90 ${isShareOpen ? 'bg-indigo-600 text-white shadow-lg' : 'text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 border dark:border-slate-700'}`}>
+              <Share2 className="w-6 h-6"/>
+            </button>
+            <button id="settings-btn" onClick={() => {
+              if (isSettingsOpen) {
+                setIsSettingsOpen(false);
+              } else {
+                setIsSettingsOpen(true);
+                setIsReportOpen(false);
+                setIsPharmacyModalOpen(false);
+                setIsShareOpen(false);
+              }
+            }} className={`w-12 h-12 flex items-center justify-center rounded-[1.4rem] transition-all active:scale-90 ${isSettingsOpen ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 border dark:border-slate-700'}`}>
+              <Settings className="w-6 h-6"/>
             </button>
           </footer>
 
@@ -3645,7 +3909,7 @@ const App: React.FC = () => {
           />
 
           <PharmacyModal
-            isOpen={isPharmacyModalOpen}
+            isOpen={ENABLE_ONLINE_STORE ? isPharmacyModalOpen : false}
             onClose={() => setIsPharmacyModalOpen(false)}
           />
 
@@ -3675,12 +3939,14 @@ const App: React.FC = () => {
                     <button 
                       onClick={() => {
                          setIsOrderChoiceOpen(false);
-                         setIsPharmacyModalOpen(true);
+                         if (ENABLE_ONLINE_STORE) {
+                           setIsPharmacyModalOpen(true);
+                         }
                       }}
                       className="w-full py-4 bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-2xl font-black text-sm flex items-center justify-center gap-2 hover:bg-blue-200 transition-colors"
                     >
                       <ShoppingBag className="w-5 h-5" />
-                      بحث في الصيدليات أونلاين
+                      {ENABLE_ONLINE_STORE ? 'بحث في الصيدليات أونلاين' : 'غير متاح حالياً'}
                     </button>
                     
                     <button 
@@ -3797,6 +4063,12 @@ const App: React.FC = () => {
               isDirty.current = true;
               setState(prev => ({ ...prev, medicalHistorySummary: newSummary }));
             }}
+          />
+
+          <HealthChartsModal
+            isOpen={isHealthChartsOpen}
+            onClose={() => setIsHealthChartsOpen(false)}
+            reports={state.adherenceHistory}
           />
 
           {isReportOpen && (
@@ -4052,7 +4324,14 @@ const App: React.FC = () => {
             }}
             onAppleSignIn={async () => { await handleAppleSignIn(); }}
             onSignOut={handleSignOut}
+            onOpenShare={() => setIsShareOpen(true)}
           />
+
+          <ShareModal
+            isOpen={isShareOpen}
+            onClose={() => setIsShareOpen(false)}
+          />
+
           {isSubscriptionModalOpen && (
             <div className="fixed inset-0 z-[350] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md animate-in fade-in">
               <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[3rem] p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar border-b-[10px] border-blue-600">
@@ -4240,7 +4519,36 @@ const App: React.FC = () => {
             <div className="fixed inset-0 z-[125] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md animate-in slide-in-from-bottom-10 duration-300">
               <div className="bg-white dark:bg-slate-900 w-full max-md rounded-[3rem] p-8 shadow-2xl relative border-b-[12px] border-blue-600 transition-colors">
                 <button onClick={() => setIsCalendarOpen(false)} className="absolute top-8 left-8 p-3.5 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-2xl"><X className="w-7 h-7"/></button>
-                <div className="text-right pt-8 mb-6"><h2 className="text-2xl font-black text-slate-900 dark:text-white">تاريخ الالتزام الدوائي</h2></div>
+                <div className="flex items-center justify-between pt-8 mb-6">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCalendarDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs active:scale-95"
+                    >
+                      الشهر السابق
+                    </button>
+                    <button
+                      onClick={() => setCalendarDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black text-xs active:scale-95"
+                    >
+                      الشهر التالي
+                    </button>
+                    <button
+                      onClick={() => setCalendarDate(new Date())}
+                      className="px-3 py-2 rounded-xl bg-blue-600 text-white font-black text-xs active:scale-95"
+                    >
+                      اليوم
+                    </button>
+                  </div>
+                  <div className="text-right">
+                    <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+                      تاريخ الالتزام الدوائي
+                    </h2>
+                    <p className="text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase">
+                      {new Intl.DateTimeFormat('ar-EG', { year: 'numeric', month: 'long' }).format(calendarDate)}
+                    </p>
+                  </div>
+                </div>
                 <div className="grid grid-cols-7 gap-5 text-center mb-10" dir="rtl">
                   {['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'].map(d => <span key={d} className="text-[11px] font-black text-slate-300 dark:text-slate-600 uppercase">{d}</span>)}
                   {renderCalendar()}
@@ -4583,7 +4891,7 @@ const App: React.FC = () => {
                                                 }}
                                                 className="w-full p-4 bg-white dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 outline-none rounded-xl font-bold text-sm text-right appearance-none"
                                             >
-                                                {Object.entries(TIME_SLOT_CONFIG).map(([key, value]) => (<option key={key} value={key}>{value.label}</option>))}
+                                                {Object.entries(TIME_SLOT_CONFIG).map(([key, value]) => (<option key={key} value={key}>{state.customSlotNames?.[key as TimeSlot] || value.label}</option>))}
                                             </select>
                                         </div>
                                     ))}
@@ -4592,13 +4900,21 @@ const App: React.FC = () => {
                          ) : (
                             <div className="space-y-2">
                               <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase mr-2">وقت التناول</label>
-                              <select value={editingMed.timeSlot || 'morning-fasting'} onChange={(e) => setEditingMed({...editingMed, timeSlot: e.target.value as TimeSlot})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 outline-none rounded-2xl font-black text-lg text-right appearance-none">
-                                {Object.entries(TIME_SLOT_CONFIG).map(([key, value]) => {
-                                    const time = state.slotHours?.[key as TimeSlot] || SLOT_HOURS[key as TimeSlot];
-                                    const formatted = formatHour(time);
-                                    return (<option key={key} value={key}>{value.label} ({formatted})</option>);
-                                })}
-                              </select>
+                              <div className="flex gap-2">
+                                <input 
+                                  type="time" 
+                                  value={editingMed.notificationTime || ''} 
+                                  onChange={(e) => setEditingMed({...editingMed, notificationTime: e.target.value})}
+                                  className="w-1/3 p-5 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 outline-none rounded-2xl font-black text-lg text-center shadow-sm focus:border-blue-500 transition-colors"
+                                />
+                                <select value={editingMed.timeSlot || 'morning-fasting'} onChange={(e) => setEditingMed({...editingMed, timeSlot: e.target.value as TimeSlot})} className="w-2/3 p-5 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 outline-none rounded-2xl font-black text-lg text-right appearance-none shadow-sm focus:border-blue-500 transition-colors">
+                                  {Object.entries(TIME_SLOT_CONFIG).map(([key, value]) => {
+                                      const time = state.slotHours?.[key as TimeSlot] || SLOT_HOURS[key as TimeSlot];
+                                      const formatted = formatHour(time);
+                                      return (<option key={key} value={key}>{state.customSlotNames?.[key as TimeSlot] || value.label} ({formatted})</option>);
+                                  })}
+                                </select>
+                              </div>
                             </div>
                          )}
                       </div>
@@ -4639,8 +4955,40 @@ const App: React.FC = () => {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase mr-2">ملاحظات إضافية</label>
-                        <textarea value={editingMed.notes || ''} onChange={(e) => setEditingMed({...editingMed, notes: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 outline-none rounded-2xl font-bold text-right h-24 resize-none" placeholder="مثال: قبل الأكل بنصف ساعة" />
+                        <div className="flex items-center justify-between mb-2">
+                           <button 
+                             onClick={async () => {
+                               if (!editingMed.name) {
+                                 alert("يرجى كتابة اسم الدواء أولاً ⚠️");
+                                 return;
+                               }
+                               if (!state.aiSubscriptionActive) {
+                                 setIsSubscriptionModalOpen(true);
+                                 return;
+                               }
+                               
+                               const btn = document.getElementById('drug-info-btn');
+                               const originalText = btn ? btn.innerText : 'معلومات الدواء (AI)';
+                               if(btn) btn.innerText = 'جاري البحث...';
+                               
+                               try {
+                                   const info = await getDrugInfo(editingMed.name);
+                                   alert(`💊 معلومات عن ${editingMed.name}:\n\n${info}`);
+                               } catch(e) {
+                                   alert("حدث خطأ أثناء البحث ❌");
+                               } finally {
+                                   if(btn) btn.innerText = originalText;
+                               }
+                             }}
+                             id="drug-info-btn"
+                             className="text-[10px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-full font-black flex items-center gap-1.5 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors shadow-sm active:scale-95"
+                           >
+                             <Sparkles className="w-3 h-3 text-amber-500" />
+                             <span>معلومات الدواء (AI)</span>
+                           </button>
+                           <label className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase">ملاحظات إضافية</label>
+                        </div>
+                        <textarea value={editingMed.notes || ''} onChange={(e) => setEditingMed({...editingMed, notes: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 focus:border-indigo-500 outline-none rounded-2xl font-bold text-right h-24 resize-none shadow-sm transition-colors" placeholder="مثال: قبل الأكل بنصف ساعة" />
                       </div>
                       <div className="flex items-center justify-end gap-3 p-4 bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-2xl">
                         <label className="font-black text-red-700 dark:text-red-400 text-sm">هذا الدواء ضروري جداً (يمنع تفويته)</label>
@@ -4665,7 +5013,7 @@ const App: React.FC = () => {
                             <div className="flex gap-4"><button onClick={() => setEditingMed(med)} className="p-4 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-[1.4rem] border dark:border-slate-700 active:scale-90 shadow-sm"><Pencil className="w-6 h-6"/></button><button onClick={() => setIdToDelete(med.id)} className="p-4 bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 rounded-[1.4rem] border dark:border-slate-700 active:scale-90 shadow-sm"><Trash2 className="w-6 h-6"/></button></div>
                             <div className="text-right">
                               <p className="font-black text-slate-800 dark:text-slate-100 text-lg">{med.name}</p>
-                              <p className="text-xs font-black text-slate-400 dark:text-slate-500 mt-1 uppercase">{med.dosage} • {TIME_SLOT_CONFIG[med.timeSlot]?.label}</p>
+                              <p className="text-xs font-black text-slate-400 dark:text-slate-500 mt-1 uppercase">{med.dosage} • {state.customSlotNames?.[med.timeSlot] || TIME_SLOT_CONFIG[med.timeSlot]?.label}</p>
                               <p
                                 className={`text-[10px] font-bold mt-1 flex items-center justify-end gap-1 ${
                                   isEmptyStock
@@ -4694,7 +5042,7 @@ const App: React.FC = () => {
                           </div>
                         );
                       })}
-                      <div className="grid grid-cols-2 gap-4 mt-6">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                         <button 
                           onClick={() => {
                             setFrequencyMode('single');
@@ -4702,11 +5050,20 @@ const App: React.FC = () => {
                             setRecurringSlots(['morning-fasting', 'night']);
                             setEditingMed({ name: '', dosage: '', timeSlot: 'morning-fasting', notes: '', isCritical: false, category: 'other', frequencyLabel: '', stock: 0, refillUnit: 'box' });
                           }} 
-                          className="py-8 border-4 border-dashed border-slate-100 dark:border-slate-800 rounded-[2rem] text-slate-400 dark:text-slate-600 font-black text-sm md:text-base hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex flex-col items-center justify-center gap-3 shadow-inner"
+                          className="py-6 border-4 border-dashed border-slate-100 dark:border-slate-800 rounded-[2rem] text-slate-400 dark:text-slate-600 font-black text-xs md:text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex flex-col items-center justify-center gap-2 shadow-inner h-36"
                         >
                           <PlusCircle className="w-8 h-8" />
                           إضافة يدوي
                         </button>
+
+                        <button 
+                          onClick={() => setIsBulkAddOpen(true)}
+                          className="py-6 border-4 border-dashed border-indigo-100 dark:border-indigo-900/30 rounded-[2rem] text-indigo-400 dark:text-indigo-500 font-black text-xs md:text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-all flex flex-col items-center justify-center gap-2 shadow-inner h-36"
+                        >
+                          <Sparkles className="w-8 h-8" />
+                          تنسيق ذكي (AI)
+                        </button>
+
                         <button 
                           onClick={async () => {
                              if (!state.aiSubscriptionActive) {
@@ -4744,7 +5101,7 @@ const App: React.FC = () => {
                                 }
                              } catch(e) { console.error(e); }
                           }} 
-                          className="py-8 border-4 border-dashed border-purple-100 dark:border-purple-900/30 bg-purple-50/50 dark:bg-purple-900/10 rounded-[2rem] text-purple-500 dark:text-purple-400 font-black text-sm md:text-base hover:bg-purple-100 dark:hover:bg-purple-900/20 transition-all flex flex-col items-center justify-center gap-3 shadow-inner relative overflow-hidden"
+                          className="py-6 border-4 border-dashed border-purple-100 dark:border-purple-900/30 bg-purple-50/50 dark:bg-purple-900/10 rounded-[2rem] text-purple-500 dark:text-purple-400 font-black text-xs md:text-sm hover:bg-purple-100 dark:hover:bg-purple-900/20 transition-all flex flex-col items-center justify-center gap-2 shadow-inner relative overflow-hidden h-36"
                         >
                           {!state.aiSubscriptionActive && (
                              <div className="absolute top-3 left-3 bg-yellow-400 text-yellow-900 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
@@ -4758,6 +5115,81 @@ const App: React.FC = () => {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {isBulkAddOpen && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-xl animate-in fade-in">
+              <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] p-8 relative border-t-[8px] border-indigo-600 shadow-2xl">
+                <button onClick={() => setIsBulkAddOpen(false)} className="absolute top-6 left-6 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl"><X className="w-6 h-6"/></button>
+                
+                <div className="text-right space-y-6">
+                   <div>
+                     <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">إضافة قائمة أدوية ذكية</h3>
+                     <p className="text-sm text-slate-500 dark:text-slate-400">اكتب كل أدويتك وجرعاتها هنا، وسيقوم الذكاء الاصطناعي بتنظيم المواعيد لك.</p>
+                   </div>
+                   
+                   <textarea 
+                     value={bulkAddInput}
+                     onChange={(e) => setBulkAddInput(e.target.value)}
+                     className="w-full h-48 p-5 bg-slate-50 dark:bg-slate-800 dark:text-white border-2 dark:border-slate-700 focus:border-indigo-500 outline-none rounded-2xl font-bold text-right resize-none custom-scrollbar"
+                     placeholder={`مثال:
+- بنادول 500 عند اللزوم
+- كونكور 5 مجم
+- اسبرين 100 بعد الغداء`}
+                   />
+
+                   <button 
+                     onClick={async () => {
+                        if (!bulkAddInput.trim()) return;
+                        if (!state.aiSubscriptionActive) {
+                            setIsSubscriptionModalOpen(true);
+                            return;
+                        }
+                        
+                        setIsCoordinating(true);
+                        try {
+                           const newMeds = await coordinateMedications(bulkAddInput);
+                           // Add IDs and save
+                           const medsWithIds = newMeds.map(m => ({
+                              ...m,
+                              id: crypto.randomUUID(),
+                              stock: 30,
+                              refillUnit: 'box' as const
+                           }));
+                           
+                           setState(prev => ({
+                              ...prev,
+                              medications: [...prev.medications, ...medsWithIds]
+                           }));
+                           
+                           alert(`تم إضافة وتنسيق ${newMeds.length} دواء بنجاح! ✅`);
+                           setIsBulkAddOpen(false);
+                           setBulkAddInput('');
+                        } catch (e) {
+                           console.error(e);
+                           alert("حدث خطأ أثناء التنسيق. يرجى المحاولة مرة أخرى.");
+                        } finally {
+                           setIsCoordinating(false);
+                        }
+                     }}
+                     disabled={isCoordinating}
+                     className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                   >
+                     {isCoordinating ? (
+                       <>
+                         <RefreshCw className="w-5 h-5 animate-spin" />
+                         جاري التنسيق الذكي...
+                       </>
+                     ) : (
+                       <>
+                         <Sparkles className="w-5 h-5" />
+                         تنسيق بال AI
+                       </>
+                     )}
+                   </button>
+                </div>
               </div>
             </div>
           )}
